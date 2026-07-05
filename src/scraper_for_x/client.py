@@ -1,0 +1,118 @@
+"""Read client: fires X's internal GraphQL reads over ``httpx`` (plan §8).
+
+This is the proven, live-tested request shape only -- no ``x-client-transaction-id``
+(§17 G-no-txid), no retry/backoff logic. Pacing and the request budget stop-reason
+decision belong to ``retrieve.py``; this module just executes one read and reports
+what happened.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+
+import httpx
+
+from . import config, errors, gql
+
+
+class ReadClient:
+    """A paced ``httpx.Client`` wrapper for X's GraphQL read endpoints."""
+
+    def __init__(
+        self,
+        auth_token: str,
+        ct0: str,
+        user_agent: str,
+        *,
+        min_pause: float | None = None,
+        max_requests: int | None = None,
+    ) -> None:
+        if min_pause is None:
+            self.min_pause = config.clamp_request_pause(config.DEFAULT_HUMAN_PAUSE[0])
+        else:
+            self.min_pause = config.clamp_request_pause(min_pause)
+        self.max_requests = max_requests
+
+        self.requests_made = 0
+        self.last_rate_limit_remaining: int | None = None
+        self.last_rate_limit_reset: int | None = None
+
+        self._client = httpx.Client(
+            headers={
+                "authorization": f"Bearer {gql.BEARER_TOKEN}",
+                "cookie": f"auth_token={auth_token}; ct0={ct0}",
+                "x-csrf-token": ct0,  # must equal the ct0 cookie value or X 403s (§17 G-ct0-csrf)
+                "x-twitter-auth-type": "OAuth2Session",
+                "x-twitter-active-user": "yes",
+                "x-twitter-client-language": "en",
+                "user-agent": user_agent,
+                # Deliberately NOT setting x-client-transaction-id: proven unnecessary
+                # for X's read GraphQL (§17 G-no-txid). Do not add it back.
+            },
+        )
+
+    def get(self, query_id: str, operation: str, variables: dict, features: dict) -> dict:
+        """Fire one GraphQL read and return the parsed JSON body."""
+        if self.requests_made > 0:
+            time.sleep(self.min_pause)
+
+        url = gql.build_url(query_id, operation)
+        response = self._client.get(
+            url,
+            params={"variables": json.dumps(variables), "features": json.dumps(features)},
+        )
+        self.requests_made += 1
+
+        remaining = response.headers.get("x-rate-limit-remaining")
+        self.last_rate_limit_remaining = int(remaining) if remaining is not None else None
+        reset = response.headers.get("x-rate-limit-reset")
+        self.last_rate_limit_reset = int(reset) if reset is not None else None
+
+        if response.status_code == 429:
+            reset_at = int(response.headers.get("x-rate-limit-reset", 0)) or None
+            raise errors.RateLimitedError(reset_at=reset_at)
+        if response.status_code == 401:
+            raise errors.SessionExpiredError()
+        if response.status_code != 200:
+            raise errors.ScraperForXError(
+                f"unexpected status {response.status_code} for {operation}"
+            )
+        body = response.json()
+        if _has_auth_error(body):
+            raise errors.SessionExpiredError()
+        return body
+
+    @property
+    def http_client(self) -> httpx.Client:
+        """The underlying `httpx.Client` (same cookies/headers), for callers that
+        need to make a request `get()` doesn't shape -- e.g. `queryids.reanchor_via_main_js`,
+        which fetches x.com's HTML and JS bundle rather than a GraphQL endpoint.
+        """
+        return self._client
+
+    def close(self) -> None:
+        self._client.close()
+
+    def __enter__(self) -> ReadClient:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
+
+
+def _has_auth_error(body: object) -> bool:
+    """Detect X's logged-out error shape on an otherwise-200 response.
+
+    X reports a stale/soft-locked session as HTTP 200 with a top-level
+    ``errors`` array containing ``{"code": 32, "message": "Could not
+    authenticate you."}`` -- checking the parsed error code (rather than a raw
+    substring scan of the response text) avoids a false positive on ordinary
+    tweet content that happens to contain a matching string.
+    """
+    if not isinstance(body, dict):
+        return False
+    error_list = body.get("errors")
+    if not isinstance(error_list, list):
+        return False
+    return any(isinstance(item, dict) and item.get("code") == 32 for item in error_list)

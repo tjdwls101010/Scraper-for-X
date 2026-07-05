@@ -1,0 +1,124 @@
+{
+  "_comment": "SYNTHETIC fixture. Root path matches parse.ENVELOPE_ROOTS['SearchTimeline']: data.search_by_raw_query.search_timeline.timeline.instructions[]. Two tweet entries + a Bottom cursor.",
+  "data": {
+    "search_by_raw_query": {
+      "search_timeline": {
+        "timeline": {
+          "instructions": [
+            {
+              "type": "TimelineAddEntries",
+              "entries": [
+                {
+                  "entryId": "tweet-5001",
+                  "content": {
+                    "entryType": "TimelineTimelineItem",
+                    "itemContent": {
+                      "tweet_results": {
+                        "result": {
+                          "__typename": "Tweet",
+                          "rest_id": "5001",
+                          "core": {
+                            "user_results": {
+                              "result": {
+                                "rest_id": "9101",
+                                "is_blue_verified": false,
+                                "core": {
+                                  "name": "Synthetic Searcher",
+                                  "screen_name": "synth_searcher",
+                                  "created_at": "Mon Jan 01 00:00:00 +0000 2018"
+                                },
+                                "legacy": {
+                                  "followers_count": 40,
+                                  "friends_count": 40,
+                                  "statuses_count": 40,
+                                  "description": "",
+                                  "url": null
+                                }
+                              }
+                            }
+                          },
+                          "legacy": {
+                            "full_text": "A synthetic search hit, first result.",
+                            "created_at": "Tue Jul 01 09:00:00 +0000 2026",
+                            "favorite_count": 1,
+                            "retweet_count": 0,
+                            "reply_count": 0,
+                            "quote_count": 0,
+                            "bookmark_count": 0,
+                            "lang": "en",
+                            "conversation_id_str": "5001",
+                            "in_reply_to_status_id_str": null,
+                            "is_quote_status": false,
+                            "entities": {"urls": [], "hashtags": []}
+                          },
+                          "views": {"count": "6"}
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "entryId": "tweet-5002",
+                  "content": {
+                    "entryType": "TimelineTimelineItem",
+                    "itemContent": {
+                      "tweet_results": {
+                        "result": {
+                          "__typename": "Tweet",
+                          "rest_id": "5002",
+                          "core": {
+                            "user_results": {
+                              "result": {
+                                "rest_id": "9102",
+                                "is_blue_verified": true,
+                                "core": {
+                                  "name": "Synthetic Searcher Two",
+                                  "screen_name": "synth_searcher_two",
+                                  "created_at": "Tue Feb 02 00:00:00 +0000 2019"
+                                },
+                                "legacy": {
+                                  "followers_count": 900,
+                                  "friends_count": 12,
+                                  "statuses_count": 3300,
+                                  "description": "",
+                                  "url": null
+                                }
+                              }
+                            }
+                          },
+                          "legacy": {
+                            "full_text": "A synthetic search hit, second result.",
+                            "created_at": "Tue Jul 01 08:00:00 +0000 2026",
+                            "favorite_count": 3,
+                            "retweet_count": 1,
+                            "reply_count": 0,
+                            "quote_count": 0,
+                            "bookmark_count": 0,
+                            "lang": "en",
+                            "conversation_id_str": "5002",
+                            "in_reply_to_status_id_str": null,
+                            "is_quote_status": false,
+                            "entities": {"urls": [], "hashtags": []}
+                          },
+                          "views": {"count": "31"}
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "entryId": "cursor-bottom-search-1",
+                  "content": {
+                    "entryType": "TimelineTimelineCursor",
+                    "cursorType": "Bottom",
+                    "value": "CURSOR_BOTTOM_SEARCH_PAGE1"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

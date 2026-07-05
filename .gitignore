@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Dev environment
+.venv/
+.ruff_cache/
+.pytest_cache/
+uv.lock
+
+# Raw captures and runtime outputs are a PII trap — ignore by an unambiguous,
+# distinct name/location so a safe fixture and an unsafe raw capture can never
+# collide under one glob (see plan §4).
+scratch/
+*.raw.json
+output/
+profiles/
+
+# NOTE: fixtures under tests/fixtures/*.json are committed, synthetic-by-
+# construction (see scripts/check_fixtures_pii.py) and need NO un-ignore
+# lines here, because the raw-capture ignore above is scoped to `*.raw.json`
+# specifically, not a blanket `*.json` — a real capture and a fixture can
+# never collide under one glob. If that ever changes to a blanket `*.json`
+# ignore, every fixture would then need un-ignoring BY EXACT NAME, never a
+# wildcard (`!tests/fixtures/*.json` would silently re-include any new raw
+# capture dropped into the same directory).
+
+.DS_Store

@@ -1,0 +1,52 @@
+name: Publish to PyPI
+
+# Fires when a GitHub Release is published (Releases page -> "Draft a new
+# release" -> pick/create tag vX.Y.Z -> Publish release) — NOT on a bare
+# `git push --tags`, which creates the tag but no visible Release entry.
+# github.ref_name still resolves to the release's tag name under this event.
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify tag matches pyproject.toml version
+        run: python3 scripts/check_tag_version.py "${{ github.ref_name }}"
+
+      - name: Install build tool
+        run: python -m pip install build
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to mint the OIDC token for PyPI Trusted Publishing — there is
+      # no stored API token anywhere in this repo (plan §15).
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      # Pinned to the commit for release v1.14.0 — a floating tag on an
+      # action that runs with publish credentials is a hijack vector
+      # (plan §15). Bump deliberately, not automatically.
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0

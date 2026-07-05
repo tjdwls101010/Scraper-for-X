@@ -1,0 +1,134 @@
+"""Query-id/feature-flag defaults and browser-free re-anchor (plan §8, §12).
+
+X rotates GraphQL query-ids roughly every 2-4 weeks as an anti-scraping
+measure; a hardcoded id then fails silently or returns an empty parse. This
+module ships a known-good fallback per op and two ways to refresh it:
+
+- ``harvest_from_browser``: called by ``scrape-x login`` with the XHR
+  requests scrapling captured during the browser session.
+- ``reanchor_via_main_js``: the **browser-free** path (`doctor --refresh` /
+  `harvest_queryids.py`) -- fetches x.com's public `main.js` bundle over an
+  already-authenticated ``httpx.Client`` and regex-extracts the current
+  query-id/feature map. No browser required.
+
+Shipped defaults are a fallback only, never the source of truth (§8, §12).
+This module does not construct an ``httpx`` client itself -- callers pass one
+in, keeping this module import-light and independently testable.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from typing import Any
+
+from .gql import DEFAULT_FEATURES
+
+# Live query-ids captured 2026-07-05 against a logged-in X session (probe-
+# verified real). `TweetDetail` and `UserTweetsAndReplies` were NOT directly
+# observed in that probe -- see the comments below; they are best-guess
+# placeholders and a known gap to close during implementation testing.
+DEFAULT_QUERY_IDS: dict[str, str] = {
+    "UserTweets": "hr4gzZONlq23okjU8fIe_A",
+    "HomeTimeline": "gKia-nBM9kwuDEfSDeWMfQ",
+    "UserByScreenName": "2qvSHpkWTMS9i0zJAwDNiA",
+    "SearchTimeline": "Bcw3RzK-PatNAmbnw54hFw",
+    # PLACEHOLDER -- not probe-verified. Guessed by copying the UserTweets id;
+    # X often (not always) reuses a sibling op's id at rotation time, but this
+    # has NOT been confirmed live. Verify against a real capture (§12) before
+    # relying on it -- a wrong id here degrades to an empty parse (exit 4).
+    "UserTweetsAndReplies": "hr4gzZONlq23okjU8fIe_A",
+    # PLACEHOLDER -- not probe-verified. No live TweetDetail capture was taken
+    # during the 2026-07-05 probe; this value is an unverified guess and MUST
+    # be replaced with a real captured id during implementation testing.
+    "TweetDetail": "xOhkmRac04_n8am8LZaObg",
+}
+
+
+@dataclass
+class QueryIdSet:
+    """One bundle of query-ids + the features map that must accompany them."""
+
+    query_ids: dict[str, str]
+    features: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_FEATURES))
+
+
+def load_default_query_ids() -> QueryIdSet:
+    """Return the shipped fallback defaults (not the source of truth, §8)."""
+    return QueryIdSet(query_ids=dict(DEFAULT_QUERY_IDS))
+
+
+# Matches .../graphql/<queryId>/<OperationName> in a captured XHR URL.
+_URL_QUERY_ID_RE = re.compile(r"/graphql/([A-Za-z0-9_-]+)/([A-Za-z0-9_]+)")
+
+
+def harvest_from_browser(captured_requests: list[Any]) -> QueryIdSet:
+    """Build a `QueryIdSet` from scrapling's captured XHR responses at login.
+
+    ``captured_requests`` is whatever ``response.captured_xhr`` handed back
+    (a list of scrapling ``Response``-like objects, each with a ``.url``
+    attribute -- see ``scraper_for_facebook.session``/``retrieve`` for the
+    reference shape this mirrors). Any op observed live overrides the
+    fallback; any op not seen during this session falls back to
+    ``DEFAULT_QUERY_IDS``.
+    """
+    observed: dict[str, str] = {}
+    for request in captured_requests:
+        url = getattr(request, "url", None)
+        if not isinstance(url, str):
+            continue
+        match = _URL_QUERY_ID_RE.search(url)
+        if match is None:
+            continue
+        query_id, operation = match.group(1), match.group(2)
+        observed[operation] = query_id
+
+    query_ids = dict(DEFAULT_QUERY_IDS)
+    query_ids.update(observed)
+    return QueryIdSet(query_ids=query_ids)
+
+
+# Locates the current main JS bundle referenced by x.com's HTML, e.g.
+# <script src="https://abs.twimg.com/responsive-web/client-web/main.abc123.js">
+_MAIN_JS_URL_RE = re.compile(
+    r"https://abs\.twimg\.com/responsive-web/client-web[\w./-]*/main\.[\w-]+\.js"
+)
+
+# Best-effort: X's minified bundle embeds each op as adjacent object-literal
+# fields, e.g. `queryId:"hr4gzZONlq23okjU8fIe_A",operationName:"UserTweets"`.
+# NEEDS VERIFICATION against a live main.js bundle -- the live probe did not
+# directly capture the bundle's exact key order/quoting/adjacency, so this
+# regex is a best guess and may need adjustment during implementation testing
+# (§8, §12). It tolerates either field-order (queryId first or operationName
+# first) within a short window of characters.
+_BUNDLE_QUERY_ID_THEN_OP_RE = re.compile(
+    r'queryId:"([A-Za-z0-9_-]+)"[^{}]{0,80}?operationName:"(\w+)"'
+)
+_BUNDLE_OP_THEN_QUERY_ID_RE = re.compile(
+    r'operationName:"(\w+)"[^{}]{0,80}?queryId:"([A-Za-z0-9_-]+)"'
+)
+
+
+def reanchor_via_main_js(http_client: Any) -> QueryIdSet:
+    """Browser-free re-anchor: fetch x.com's main.js bundle and regex the ids.
+
+    ``http_client`` is a caller-configured ``httpx.Client`` (cookies already
+    set) -- this function does not construct one itself. Any op found in the
+    bundle overrides the fallback; any op not matched falls back to
+    ``DEFAULT_QUERY_IDS``.
+    """
+    observed: dict[str, str] = {}
+
+    html_response = http_client.get("https://x.com")
+    main_js_match = _MAIN_JS_URL_RE.search(html_response.text)
+    if main_js_match is not None:
+        bundle_response = http_client.get(main_js_match.group(0))
+        bundle_text = bundle_response.text
+        for query_id, operation in _BUNDLE_QUERY_ID_THEN_OP_RE.findall(bundle_text):
+            observed[operation] = query_id
+        for operation, query_id in _BUNDLE_OP_THEN_QUERY_ID_RE.findall(bundle_text):
+            observed.setdefault(operation, query_id)
+
+    query_ids = dict(DEFAULT_QUERY_IDS)
+    query_ids.update(observed)
+    return QueryIdSet(query_ids=query_ids)
