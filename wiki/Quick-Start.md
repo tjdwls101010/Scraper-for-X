@@ -81,7 +81,7 @@ $ scrape-x fetch nasa --limit 50 --format json
 50 tweets, range 2026-05-02..2026-07-04, stop reason: limit_reached. Saved to /Users/you/Library/Application Support/scraper-for-x/output/nasa-20260705T031813123456Z.json
 ```
 
-`nasa` here can be a bare username, `@nasa`, a numeric user id (pass `--by id` if a bare numeric string should be read as a screen name instead — otherwise an all-digit token is assumed to be an id), or a full profile URL like `https://x.com/nasa`. Add `--replies` to include the account's replies alongside its own tweets, `--since 2026-06-01`/`--until 2026-06-30` to bound the date range, `--wait-on-limit` (optionally with `--max-wait SECONDS`) to sleep out a rate-limit instead of stopping, and `--format ndjson` for one JSON object per line instead of a single array.
+`nasa` here can be a bare username, `@nasa`, a numeric user id (pass `--by id` if a bare numeric string should be read as a screen name instead — otherwise an all-digit token is assumed to be an id), or a full profile URL like `https://x.com/nasa`. `--since 2026-06-01`/`--until 2026-06-30` bound the date range, `--wait-on-limit` (optionally with `--max-wait SECONDS`) sleeps out a rate-limit instead of stopping, and `--format ndjson` gives one JSON object per line instead of a single array. `--replies` exists as a documented flag but is **not yet implemented** (exits 1 immediately with a clear message) — see [FAQ-and-Troubleshooting.md](FAQ-and-Troubleshooting.md).
 
 Notice where the file landed: **not** your current directory, and not stdout. By default, output goes under this tool's own per-user data directory (via [`platformdirs`](https://pypi.org/project/platformdirs/) — on macOS, `~/Library/Application Support/scraper-for-x/output/`), named `<identifier>-<UTC timestamp>.json`. That's deliberate: captured tweets contain other people's names, text, and media URLs (real third-party personal data — see [../DISCLAIMER.md §4–5](../DISCLAIMER.md)), and a default that lands quietly in your current directory is a default that eventually gets `git add`ed by accident. Pass `--output some/path.json` if you want it somewhere specific.
 
@@ -89,15 +89,7 @@ The one-line summary on stderr always tells you three things, so a partial run i
 
 ### Search
 
-```bash
-$ scrape-x search 'from:nasa artemis' --product latest --limit 20
-```
-
-```
-20 tweets, range 2026-06-11..2026-07-03, stop reason: limit_reached. Saved to /Users/you/Library/Application Support/scraper-for-x/output/from-nasa-artemis-20260705T031902456789Z.json
-```
-
-`query` accepts the same advanced search operators X's own search bar does (`from:`, `since:`, exact phrases, etc.). `--product` picks the timeline X itself would show for that query — `latest` (default, reverse-chronological) or `top` (X's relevance ranking). `--since`/`--until`/`--limit`/`--wait-on-limit` all work the same as `fetch`.
+**Not yet implemented in v0.1.0.** `scrape-x search <query>` exits immediately with a clear `FeatureNotImplementedError` message and exit code `1` — X's `SearchTimeline` requires a fresh, single-use `x-client-transaction-id` per request (live-verified 2026-07-05), which this package's harvest-then-replay architecture doesn't reproduce. See [FAQ-and-Troubleshooting.md](FAQ-and-Troubleshooting.md) for why, and the roadmap for a planned fix.
 
 ### One tweet plus its thread
 
@@ -173,7 +165,7 @@ for tweet in tweets:
     print(tweet.id, tweet.text[:80])
 ```
 
-`XScraper` requires an active session (`x.login()`, or `XScraper.from_cookie_file(path)` — see step 1) and must be used inside a `with` block; reads outside of one raise `NotEnteredError`. `search()` and `fetch_tweet()` mirror the CLI's `search`/`tweet` subcommands, and `iter_user_tweets()` is a streaming generator form of `fetch_user_tweets()` for consuming tweets incrementally instead of waiting for the whole list.
+`XScraper` requires an active session (`x.login()`, or `XScraper.from_cookie_file(path)` — see step 1) and must be used inside a `with` block; reads outside of one raise `NotEnteredError`. `fetch_tweet()` mirrors the CLI's `tweet` subcommand, and `iter_user_tweets()` is a streaming generator form of `fetch_user_tweets()` for consuming tweets incrementally instead of waiting for the whole list. `search()` and `fetch_user_tweets(replies=True)`/`iter_user_tweets(replies=True)` raise `FeatureNotImplementedError` — not yet implemented, see [FAQ-and-Troubleshooting.md](FAQ-and-Troubleshooting.md).
 
 ## Exit codes
 

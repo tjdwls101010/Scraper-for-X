@@ -38,11 +38,17 @@ scrape-x fetch nasa --limit 50
 | `scrape-x status` | Check whether the persisted session is logged in, expired, or rate-limited |
 | `scrape-x setup` | Provision the login browser into an isolated cache (requires `[browser]`) |
 | `scrape-x doctor` | Authenticated round-trip + query-id freshness check (`--refresh` re-anchors query-ids from x.com's `main.js`, browser-free) |
-| `scrape-x fetch <identifier>` | A profile's tweets/replies/media (`--replies`, `--limit`, `--since`, `--until`, `--by screen_name\|id`) |
-| `scrape-x search <query>` | Tweets matching a search query (`--product latest\|top`, `--limit`, `--since`, `--until`) |
+| `scrape-x fetch <identifier>` | A profile's tweets/media (`--limit`, `--since`, `--until`, `--by screen_name\|id`) — **`--replies` not yet implemented, see below** |
+| `scrape-x search <query>` | **Not yet implemented, see below** |
 | `scrape-x tweet <identifier>` | A single tweet plus its reply/conversation thread (`--replies`) |
 
 `fetch`/`search`/`tweet` all share `--format json|ndjson`, `--output PATH`, `--profile NAME`, `--profile-dir PATH`, `--wait-on-limit`, `--max-wait`, `--raw` (+ `--no-redact`), and `-v/--verbose`. See the [CLI Reference](wiki/CLI-Reference.md) for every flag and exit code.
+
+### Known limitation: `search` and `fetch --replies` (v0.1.0)
+
+Live-verified 2026-07-05: X's `SearchTimeline` and `UserTweetsAndReplies` GraphQL operations require a fresh, **single-use** `x-client-transaction-id` header on every request — unlike plain profile fetches and single-tweet lookups, which this package proved work over plain `httpx` replay with no such header. A captured transaction-id cannot be harvested once and reused like a session cookie or query-id; reproducing X's generator for it is exactly the fragility this package's harvest-then-replay architecture was built to avoid (see [twikit#408](https://github.com/d60/twikit/issues/408)).
+
+Both `scrape-x search` and `scrape-x fetch --replies` fail fast with a clear `FeatureNotImplementedError` (exit code 1) rather than a confusing network error. A browser-observe fallback for these two operations specifically (the same approach `scrape-fb` uses) is on the roadmap — see [wiki/FAQ-and-Troubleshooting.md](wiki/FAQ-and-Troubleshooting.md).
 
 ## Python API
 
@@ -56,8 +62,8 @@ with XScraper(profile="default") as x:
     for tweet in x.iter_user_tweets("nasa", limit=50):
         ...  # must be consumed inside the `with` block
 
-    x.search("from:nasa since:2026-01-01", limit=50)
     x.fetch_tweet("https://x.com/nasa/status/1234567890")
+    # x.search(...) raises FeatureNotImplementedError -- see "Known limitation" above.
 ```
 
 ## Documentation

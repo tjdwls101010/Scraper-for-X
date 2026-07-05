@@ -214,7 +214,7 @@ A profile's tweets (or tweets + replies), deep via cursor pagination. Materializ
 **Parameters:**
 
 - `identifier` — `@handle`, bare username, numeric user id, or a full `x.com`/`twitter.com` profile URL. Normalized and validated before any request is made; an unparseable value raises [`InvalidIdentifierError`](#invalididentifiererror) immediately.
-- `replies` — when `True`, uses X's "tweets and replies" timeline instead of "tweets" (including media-only tab equivalents aren't separately exposed).
+- `replies` — **not yet implemented**: `replies=True` raises [`FeatureNotImplementedError`](#featurenotimplementederror) immediately, before any network request. X's "tweets and replies" (`UserTweetsAndReplies`) GraphQL operation requires a fresh, single-use `x-client-transaction-id` per request (live-verified 2026-07-05) that this package's harvest-then-replay architecture doesn't reproduce — see that error's docstring and [FAQ-and-Troubleshooting.md](FAQ-and-Troubleshooting.md).
 - `limit` — maximum number of (non-pinned) tweets to return. `None` means no count limit (bounded only by `max_requests`/feed exhaustion). A pinned tweet, if present, is always included and never counts against `limit`.
 - `since` / `until` — inclusive date bounds, either an ISO `"YYYY-MM-DD"` string or a `datetime.date`. A malformed string raises `ValueError` (strict `date.fromisoformat` parsing). `since` stops pagination once a tweet older than the bound is seen; check `x.last_result.since_target_crossed` to confirm the bound was actually reached rather than merely inferred from `limit_reached`/`max_requests`.
 - `by` — disambiguates an all-digit `identifier` that would otherwise default to a numeric user id. Pass `by="screen_name"` to force treating an all-digit string as a handle instead.
@@ -271,7 +271,7 @@ def iter_user_tweets(
 ) -> Iterator[Tweet]
 ```
 
-Same parameters as `fetch_user_tweets()` — this is the streaming form. Unlike the FB sibling's `iter_profile()`, **this one genuinely streams**: each page's tweets are yielded as soon as they're parsed, one cursor-paginated network round trip at a time, rather than fully materializing the whole run before yielding anything. Breaking out of your loop early *does* save the remaining requests, which matters for a deep `limit=1000`-style pull where each page costs its own round trip plus pacing delay.
+Same parameters as `fetch_user_tweets()` — this is the streaming form (`replies=True` raises `FeatureNotImplementedError` here too, for the same reason). Unlike the FB sibling's `iter_profile()`, **this one genuinely streams**: each page's tweets are yielded as soon as they're parsed, one cursor-paginated network round trip at a time, rather than fully materializing the whole run before yielding anything. Breaking out of your loop early *does* save the remaining requests, which matters for a deep `limit=1000`-style pull where each page costs its own round trip plus pacing delay.
 
 Two things to know:
 
@@ -295,6 +295,8 @@ with XScraper(profile="default") as x:
 ```
 
 ## search()
+
+**Not yet implemented in v0.1.0.** Calling `search()` raises [`FeatureNotImplementedError`](#featurenotimplementederror) immediately, before any network request — X's `SearchTimeline` GraphQL operation requires a fresh, single-use `x-client-transaction-id` per request (live-verified 2026-07-05), which this package's harvest-then-replay architecture doesn't reproduce. The signature/behavior below is what's implemented once a browser-observe fallback lands for this op (roadmap) — see [FAQ-and-Troubleshooting.md](FAQ-and-Troubleshooting.md).
 
 ```python
 def search(
@@ -321,7 +323,7 @@ If nothing matches, `stop_reason` on `self.last_result` is `"no_matches"` (disti
 
 ```python
 with XScraper(profile="default") as x:
-    tweets = x.search('from:nasa "artemis"', product="Latest", limit=20)
+    tweets = x.search('from:nasa "artemis"', product="Latest", limit=20)  # raises FeatureNotImplementedError today
 ```
 
 ## fetch_tweet()
@@ -426,7 +428,9 @@ ScraperForXError (base)
 ├── InvalidCookieError (also subclasses ValueError)
 ├── InvalidIdentifierError (also subclasses ValueError)
 ├── NotEnteredError
-└── SessionClosedError
+├── SessionClosedError
+├── EnvelopeParseError
+└── FeatureNotImplementedError
 ```
 
 #### `ScraperForXError`
@@ -473,6 +477,14 @@ A read method was called on an `XScraper` instance that was never entered via `w
 #### `SessionClosedError`
 
 A read was attempted on an `XScraper` instance whose `with` block has already exited, or an `iter_user_tweets()` generator was advanced after that point. **Fix:** don't hold onto an `XScraper` instance (or a generator from it) past its `with` block.
+
+#### `EnvelopeParseError`
+
+The GraphQL response envelope couldn't be located at all (e.g. `data.user.result.timeline...` for `UserTweets`) — a structural parse failure, distinct from a page that parsed fine but had zero tweets. Almost always means X rotated a query-id or changed the response shape. **Fix:** run `scrape-x doctor --refresh` (or `XScraper(...).status()` followed by a fresh `login()`) to re-anchor query-ids, then retry.
+
+#### `FeatureNotImplementedError`
+
+Raised by `search()` and by `fetch_user_tweets(replies=True)`/`iter_user_tweets(replies=True)` — both `SearchTimeline` and `UserTweetsAndReplies` require a fresh, single-use `x-client-transaction-id` per request (live-verified 2026-07-05), which this package's harvest-then-replay architecture doesn't reproduce (unlike `UserTweets`/`TweetDetail`, both proven to work over plain `httpx`). See the [README's "Known limitation"](../README.md#known-limitation-search-and-fetch---replies-v010) section and [FAQ-and-Troubleshooting.md](FAQ-and-Troubleshooting.md) for the roadmap.
 
 ## RetrieveResult
 

@@ -72,3 +72,20 @@ class SessionClosedError(ScraperForXError):
     The generator drives the read client; it can only make progress while the
     session is open. Consume it inside the ``with XScraper(...) as x:`` block.
     """
+
+
+class FeatureNotImplementedError(ScraperForXError):
+    """This op requires X's ``x-client-transaction-id`` on every request.
+
+    Live-verified 2026-07-05: unlike ``UserTweets``/``TweetDetail`` (proven
+    to work over plain ``httpx`` replay), X's ``SearchTimeline`` and
+    ``UserTweetsAndReplies`` reject a request missing this header -- and the
+    header is single-use (replaying a captured value works exactly once,
+    then 404s on every subsequent request), so it cannot be harvested once
+    and replayed the way session cookies and query-ids are. Reproducing X's
+    transaction-id generator is exactly the fragility this package's
+    harvest-then-replay architecture was built to avoid (see twikit#408).
+    ``search()`` and ``fetch_user_tweets(replies=True)``/
+    ``iter_user_tweets(replies=True)`` raise this until a browser-observe
+    fallback is built for these two ops specifically (roadmap).
+    """

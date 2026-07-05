@@ -21,6 +21,7 @@ from . import retrieve as retrieve_module
 from . import session as session_module
 from .config import DEFAULT_PROFILE_NAME
 from .errors import (
+    FeatureNotImplementedError,
     InvalidCookieError,
     InvalidIdentifierError,
     LoginRequiredError,
@@ -55,6 +56,7 @@ __all__ = [
     "NotEnteredError",
     "SessionClosedError",
     "EnvelopeParseError",
+    "FeatureNotImplementedError",
 ]
 
 

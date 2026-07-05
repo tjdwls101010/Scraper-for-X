@@ -4,6 +4,12 @@ Questions people actually ask about this tool, and the errors people actually hi
 
 ## FAQ
 
+### Why do `search` and `fetch --replies` say "not yet implemented"?
+
+Live-verified 2026-07-05, after the rest of this package was already built and tested: unlike `UserTweets` and `TweetDetail` (proven to work over plain `httpx` replay with no `x-client-transaction-id`, the whole premise of this package's harvest-then-replay design — see the README), X's `SearchTimeline` and `UserTweetsAndReplies` GraphQL operations reject a request that's missing this header. Worse, it's **single-use**: replaying a transaction-id captured from a real browser request works exactly once, then every subsequent request with that same value 404s. That means it can't be harvested once (like a query-id) and reused — a fresh, cryptographically-derived value is needed on *every* request, which requires either reimplementing X's transaction-id generator (fragile, high-maintenance, exactly what broke [twikit#408](https://github.com/d60/twikit/issues/408) and exactly what this package's architecture was built to avoid) or driving an actual browser for every search/replies read (the `scrape-fb`-style browser-observe approach).
+
+`scrape-x search` and `scrape-x fetch --replies` (and the Python API's `search()`/`fetch_user_tweets(replies=True)`/`iter_user_tweets(replies=True)`) fail immediately with a clear `FeatureNotImplementedError`/exit code `1`, rather than a confusing 404 buried in a stack trace. A browser-observe fallback for these two operations specifically is on the roadmap; `scrape-x fetch` (without `--replies`) and `scrape-x tweet` are unaffected and fully working.
+
 ### Will my account get banned?
 
 It can. Read [../DISCLAIMER.md](../DISCLAIMER.md) — it's not boilerplate. Automating any X account, including just driving a real logged-in session to read what it can already see, is against X's Terms of Service, and X enforces that with suspensions, permanent bans, and account-security challenges.

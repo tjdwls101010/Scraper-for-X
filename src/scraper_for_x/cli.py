@@ -12,6 +12,7 @@ from pathlib import Path
 from . import __version__, auth, client, redact, retrieve, session
 from .config import DEFAULT_PROFILE_NAME, default_output_dir
 from .errors import (
+    FeatureNotImplementedError,
     InvalidCookieError,
     InvalidIdentifierError,
     LoginRequiredError,
@@ -318,6 +319,9 @@ def _handle_common_errors(exc: Exception, args: argparse.Namespace) -> int:
         return 5
     if isinstance(exc, InvalidIdentifierError):
         print(f"invalid identifier: {exc}", file=sys.stderr)
+        return 1
+    if isinstance(exc, FeatureNotImplementedError):
+        print(f"not yet implemented: {exc}", file=sys.stderr)
         return 1
     return -1
 

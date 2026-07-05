@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from scraper_for_x import errors, retrieve, session
 
 
@@ -55,7 +57,7 @@ class FakeReadClient:
         self._pages = list(pages)
         self.requests_made = 0
 
-    def get(self, query_id, operation, variables, features):
+    def get(self, query_id, operation, variables, features, field_toggles=None):
         if not self._pages:
             raise AssertionError("FakeReadClient exhausted -- test scripted too few pages")
         self.requests_made += 1
@@ -285,3 +287,37 @@ def test_iter_user_tweets_streams_incrementally_not_all_at_once():
     rest = list(stream)
     assert [t.id for t in rest] == ["2"]
     assert client.requests_made == 2
+
+
+def test_search_raises_feature_not_implemented():
+    """Regression guard: live-verified 2026-07-05 that SearchTimeline requires
+    a single-use x-client-transaction-id per request, which this package's
+    harvest-then-replay architecture cannot reproduce -- search() must fail
+    fast with a clear, typed error, not a confusing 404 deep in client.py."""
+    client = FakeReadClient([])
+    with pytest.raises(errors.FeatureNotImplementedError):
+        retrieve.search(client, {}, {}, "hello")
+    assert client.requests_made == 0  # fails before making any request
+
+
+def test_fetch_user_tweets_replies_raises_feature_not_implemented():
+    client = FakeReadClient([])
+    with pytest.raises(errors.FeatureNotImplementedError):
+        retrieve.fetch_user_tweets(client, {}, {}, "id", "123", replies=True)
+    assert client.requests_made == 0
+
+
+def test_iter_user_tweets_replies_raises_feature_not_implemented_eagerly():
+    """`iter_user_tweets` is a plain function wrapping a generator (plan §5) --
+    confirm the guard fires at call time, not deferred to the first next()."""
+    client = FakeReadClient([])
+    with pytest.raises(errors.FeatureNotImplementedError):
+        retrieve.iter_user_tweets(client, {}, {}, "id", "123", replies=True)
+    assert client.requests_made == 0
+
+
+def test_fetch_user_tweets_without_replies_is_unaffected():
+    page = _page([_tweet_entry("1", DAY1)], cursor=None)
+    client = FakeReadClient([page])
+    result = retrieve.fetch_user_tweets(client, {}, {}, "id", "123", replies=False)
+    assert [t.id for t in result.tweets] == ["1"]

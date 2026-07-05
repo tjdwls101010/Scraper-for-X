@@ -77,6 +77,7 @@ def paginate_iter(
     features: dict,
     build_variables,
     *,
+    field_toggles: dict | None = None,
     query_ids: dict | None = None,
     limit: int | None = None,
     since: datetime | None = None,
@@ -92,7 +93,9 @@ def paginate_iter(
     ``XScraper.iter_user_tweets`` (a true incremental generator, plan §5) build on.
 
     ``build_variables(cursor)`` builds the ``variables`` dict for the next
-    request (``cursor=None`` for the first page). Raises
+    request (``cursor=None`` for the first page). ``field_toggles`` is a
+    third, op-specific query param some ops require (plan §8 -- found live;
+    omitted entirely, not just empty, for ops that don't use it). Raises
     ``parse.EnvelopeParseError`` un-caught if the response envelope can't be
     located at all (plan §11: that is a structural failure, not an empty
     result, and callers map it to exit 4). ``state`` is filled in as a side
@@ -110,7 +113,9 @@ def paginate_iter(
             break
 
         try:
-            body = read_client.get(query_id, operation, build_variables(cursor), features)
+            body = read_client.get(
+                query_id, operation, build_variables(cursor), features, field_toggles
+            )
         except errors.RateLimitedError as exc:
             if wait_on_limit and exc.reset_at is not None:
                 wait_seconds = max(0.0, exc.reset_at - time.time())
@@ -195,6 +200,7 @@ def paginate(
     features: dict,
     build_variables,
     *,
+    field_toggles: dict | None = None,
     query_ids: dict | None = None,
     limit: int | None = None,
     since: datetime | None = None,
@@ -216,6 +222,7 @@ def paginate(
             query_id,
             features,
             build_variables,
+            field_toggles=field_toggles,
             query_ids=query_ids,
             limit=limit,
             since=since,
@@ -263,17 +270,30 @@ def _user_tweets_op(
 ):
     """Shared setup for `fetch_user_tweets`/`iter_user_tweets`: resolve the
     target to a user id (raises `ProfileUnavailableError` eagerly if it
-    can't be), then build the (operation, query_id, build_variables) triple
-    `paginate`/`paginate_iter` need.
+    can't be), then build the (operation, query_id, build_variables,
+    field_toggles) `paginate`/`paginate_iter` need. Plain `UserTweets` needs
+    no `field_toggles` (always `None` here).
+
+    `replies=True` (`UserTweetsAndReplies`) raises `FeatureNotImplementedError`
+    -- live-verified 2026-07-05 that this op requires a single-use
+    `x-client-transaction-id` per request, which cannot be harvested once and
+    replayed like a session cookie or query-id (see that error's docstring).
     """
+    if replies:
+        raise errors.FeatureNotImplementedError(
+            "fetch_user_tweets(replies=True) / iter_user_tweets(replies=True) require "
+            "X's per-request x-client-transaction-id, which this package's "
+            "harvest-then-replay architecture does not reproduce (see "
+            "FeatureNotImplementedError's docstring). Not yet implemented."
+        )
     user_id = resolve_user_id(read_client, query_ids, features, kind, value)
-    operation = "UserTweetsAndReplies" if replies else "UserTweets"
+    operation = "UserTweets"
     query_id = query_ids.get(operation, queryids.DEFAULT_QUERY_IDS[operation])
 
     def build_variables(cursor: str | None) -> dict:
-        return gql.user_tweets_variables(user_id, cursor=cursor, include_replies=replies)
+        return gql.user_tweets_variables(user_id, cursor=cursor)
 
-    return operation, query_id, build_variables
+    return operation, query_id, build_variables, None
 
 
 def fetch_user_tweets(
@@ -293,7 +313,7 @@ def fetch_user_tweets(
     raw: bool = False,
 ) -> RetrieveResult:
     """A profile's tweets/replies/media, deep via cursor pagination (plan §1)."""
-    operation, query_id, build_variables = _user_tweets_op(
+    operation, query_id, build_variables, field_toggles = _user_tweets_op(
         read_client, query_ids, features, identifier_kind, identifier_value, replies=replies
     )
     return paginate(
@@ -302,6 +322,7 @@ def fetch_user_tweets(
         query_id,
         features,
         build_variables,
+        field_toggles=field_toggles,
         query_ids=query_ids,
         limit=limit,
         since=since,
@@ -341,7 +362,7 @@ def iter_user_tweets(
     loop is lazy. Pass `state` to inspect `stop_reason`/etc. after the
     returned iterator is exhausted.
     """
-    operation, query_id, build_variables = _user_tweets_op(
+    operation, query_id, build_variables, field_toggles = _user_tweets_op(
         read_client, query_ids, features, identifier_kind, identifier_value, replies=replies
     )
     if state is None:
@@ -352,6 +373,7 @@ def iter_user_tweets(
         query_id,
         features,
         build_variables,
+        field_toggles=field_toggles,
         query_ids=query_ids,
         limit=limit,
         since=since,
@@ -379,26 +401,17 @@ def search(
     max_wait: float | None = None,
     raw: bool = False,
 ) -> RetrieveResult:
-    """Tweets matching a query / advanced operators (plan §1)."""
-    query_id = query_ids.get("SearchTimeline", queryids.DEFAULT_QUERY_IDS["SearchTimeline"])
+    """Tweets matching a query / advanced operators (plan §1).
 
-    def build_variables(cursor: str | None) -> dict:
-        return gql.search_timeline_variables(query, cursor=cursor, product=product)
-
-    return paginate(
-        read_client,
-        "SearchTimeline",
-        query_id,
-        features,
-        build_variables,
-        query_ids=query_ids,
-        limit=limit,
-        since=since,
-        until=until,
-        max_requests=max_requests,
-        wait_on_limit=wait_on_limit,
-        max_wait=max_wait,
-        raw=raw,
+    Raises `FeatureNotImplementedError` unconditionally -- live-verified
+    2026-07-05 that `SearchTimeline` requires a single-use
+    `x-client-transaction-id` per request (see that error's docstring); not
+    yet implemented.
+    """
+    raise errors.FeatureNotImplementedError(
+        "search() requires X's per-request x-client-transaction-id, which this "
+        "package's harvest-then-replay architecture does not reproduce (see "
+        "FeatureNotImplementedError's docstring). Not yet implemented."
     )
 
 
@@ -434,6 +447,7 @@ def fetch_tweet(
         query_id,
         features,
         build_variables,
+        field_toggles=gql.TWEET_DETAIL_FIELD_TOGGLES,
         query_ids=query_ids,
         max_requests=1 if not replies else max_requests,
         wait_on_limit=wait_on_limit,

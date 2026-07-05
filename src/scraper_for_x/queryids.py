@@ -7,13 +7,13 @@ module ships a known-good fallback per op and two ways to refresh it:
 - ``harvest_from_browser``: called by ``scrape-x login`` with the XHR
   requests scrapling captured during the browser session.
 - ``reanchor_via_main_js``: the **browser-free** path (`doctor --refresh` /
-  `harvest_queryids.py`) -- fetches x.com's public `main.js` bundle over an
-  already-authenticated ``httpx.Client`` and regex-extracts the current
-  query-id/feature map. No browser required.
+  `harvest_queryids.py`) -- fetches x.com's public `main.js` bundle over a
+  minimal cookie-only ``httpx.Client`` it builds itself (NOT the caller's
+  GraphQL ``ReadClient`` -- see the function's docstring for why that
+  specifically breaks this fetch) and regex-extracts the current query-id/
+  feature map. No browser required.
 
 Shipped defaults are a fallback only, never the source of truth (§8, §12).
-This module does not construct an ``httpx`` client itself -- callers pass one
-in, keeping this module import-light and independently testable.
 """
 
 from __future__ import annotations
@@ -21,6 +21,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from typing import Any
+
+import httpx
 
 from .gql import DEFAULT_FEATURES
 
@@ -109,25 +111,36 @@ _BUNDLE_OP_THEN_QUERY_ID_RE = re.compile(
 )
 
 
-def reanchor_via_main_js(http_client: Any) -> QueryIdSet:
+def reanchor_via_main_js(auth_token: str, ct0: str, user_agent: str) -> QueryIdSet:
     """Browser-free re-anchor: fetch x.com's main.js bundle and regex the ids.
 
-    ``http_client`` is a caller-configured ``httpx.Client`` (cookies already
-    set) -- this function does not construct one itself. Any op found in the
-    bundle overrides the fallback; any op not matched falls back to
-    ``DEFAULT_QUERY_IDS``.
+    Builds its OWN minimal ``httpx.Client`` -- cookies + user-agent, nothing
+    else -- rather than accepting the caller's GraphQL ``ReadClient``. This
+    is deliberate, not an arbitrary restriction: X's plain web page
+    (``https://x.com``, and the CDN-hosted JS bundle it references) returns
+    **401 with an empty body** when the request carries the GraphQL-endpoint-
+    only headers (``authorization: Bearer ...``, ``x-twitter-auth-type``,
+    ``x-csrf-token``) -- confirmed live. A real browser loading the homepage
+    never sends those headers either; only cookies + user-agent are needed
+    here, matching that. Any op found in the bundle overrides the fallback;
+    any op not matched falls back to ``DEFAULT_QUERY_IDS``.
     """
     observed: dict[str, str] = {}
 
-    html_response = http_client.get("https://x.com")
-    main_js_match = _MAIN_JS_URL_RE.search(html_response.text)
-    if main_js_match is not None:
-        bundle_response = http_client.get(main_js_match.group(0))
-        bundle_text = bundle_response.text
-        for query_id, operation in _BUNDLE_QUERY_ID_THEN_OP_RE.findall(bundle_text):
-            observed[operation] = query_id
-        for operation, query_id in _BUNDLE_OP_THEN_QUERY_ID_RE.findall(bundle_text):
-            observed.setdefault(operation, query_id)
+    with httpx.Client(
+        cookies={"auth_token": auth_token, "ct0": ct0},
+        headers={"user-agent": user_agent},
+        follow_redirects=True,
+    ) as http_client:
+        html_response = http_client.get("https://x.com")
+        main_js_match = _MAIN_JS_URL_RE.search(html_response.text)
+        if main_js_match is not None:
+            bundle_response = http_client.get(main_js_match.group(0))
+            bundle_text = bundle_response.text
+            for query_id, operation in _BUNDLE_QUERY_ID_THEN_OP_RE.findall(bundle_text):
+                observed[operation] = query_id
+            for operation, query_id in _BUNDLE_OP_THEN_QUERY_ID_RE.findall(bundle_text):
+                observed.setdefault(operation, query_id)
 
     query_ids = dict(DEFAULT_QUERY_IDS)
     query_ids.update(observed)

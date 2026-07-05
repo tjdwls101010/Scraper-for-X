@@ -40,7 +40,18 @@ _HEALTHCHECK_SCREEN_NAME = "x"
 #: `harvest_from_browser` has more to observe (plan §7, §8, §12). Fixed,
 #: X-owned handles -- this doesn't depend on (or touch) any particular user's
 #: data.
-_HARVEST_NAV_URLS = ("https://x.com/X", "https://x.com/search?q=x&f=live")
+#:
+#: `with_replies` fires UserTweetsAndReplies (not just UserTweets); a plain
+#: profile/search visit alone never triggers it or TweetDetail (see
+#: `_wait_then_harvest`, which additionally opens a tweet found on one of
+#: these pages) -- without this, those two ops would NEVER get harvested
+#: during a normal login, no matter how many times you log in, and would
+#: silently keep falling back to the shipped placeholder query-ids forever.
+_HARVEST_NAV_URLS = (
+    "https://x.com/X",
+    "https://x.com/X/with_replies",
+    "https://x.com/search?q=x&f=live",
+)
 
 
 class Status(Enum):
@@ -129,7 +140,9 @@ def run_doctor(
 
         message = "OK - authenticated round-trip succeeded"
         if refresh:
-            fresh = queryids.reanchor_via_main_js(read_client.http_client)
+            fresh = queryids.reanchor_via_main_js(
+                credential.auth_token, credential.ct0, credential.user_agent
+            )
             credential.query_ids = fresh.query_ids
             credential.features = fresh.features
             auth.save_session(profile, credential, profile_dir_override=profile_dir_override)
@@ -187,16 +200,30 @@ def run_login(profile: str, *, profile_dir_override: str | None = None) -> bool:
             "A browser window should now be open. Log in to X there, "
             "then press Enter here to continue... "
         )
-        # Best-effort: a couple of quick, fixed-target navigations so more
-        # GraphQL ops (UserTweets/SearchTimeline/UserByScreenName) fire and
-        # get captured -- not required (unobserved ops fall back to shipped
-        # defaults), just makes the harvest more complete (plan §8, §12).
+        # Best-effort: a few quick, fixed-target navigations so more GraphQL
+        # ops (UserTweets/UserTweetsAndReplies/SearchTimeline/UserByScreenName)
+        # fire and get captured -- not required (unobserved ops fall back to
+        # shipped defaults), just makes the harvest more complete (plan §8, §12).
         for url in _HARVEST_NAV_URLS:
             try:
                 page.goto(url, wait_until="domcontentloaded", timeout=20000)
                 page.wait_for_timeout(2500)
             except Exception:
                 continue
+
+        # Best-effort: also fire TweetDetail. There is no fixed X-owned tweet
+        # URL to hardcode (a specific tweet id can get deleted), so instead
+        # open whatever tweet link is on the current (search results) page --
+        # we only need the query-id this triggers, not any particular tweet's
+        # content.
+        try:
+            href = page.eval_on_selector('a[href*="/status/"]', "el => el.getAttribute('href')")
+            if href:
+                detail_url = href if href.startswith("http") else f"https://x.com{href}"
+                page.goto(detail_url, wait_until="domcontentloaded", timeout=20000)
+                page.wait_for_timeout(2500)
+        except Exception:
+            pass
 
     with _build_stealth_session(profile_dir, headless=False) as session:
         response = session.fetch(

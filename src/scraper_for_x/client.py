@@ -52,16 +52,30 @@ class ReadClient:
             },
         )
 
-    def get(self, query_id: str, operation: str, variables: dict, features: dict) -> dict:
-        """Fire one GraphQL read and return the parsed JSON body."""
+    def get(
+        self,
+        query_id: str,
+        operation: str,
+        variables: dict,
+        features: dict,
+        field_toggles: dict | None = None,
+    ) -> dict:
+        """Fire one GraphQL read and return the parsed JSON body.
+
+        ``field_toggles`` is a third query param some ops require alongside
+        ``variables``/``features`` (found live 2026-07-05 -- omitting it for
+        an op that needs it causes a 404, the same failure mode as a wrong
+        query-id); omitted entirely (not sent as `{}`) when ``None``, since
+        some ops (e.g. ``SearchTimeline``) are never sent one at all.
+        """
         if self.requests_made > 0:
             time.sleep(self.min_pause)
 
         url = gql.build_url(query_id, operation)
-        response = self._client.get(
-            url,
-            params={"variables": json.dumps(variables), "features": json.dumps(features)},
-        )
+        params = {"variables": json.dumps(variables), "features": json.dumps(features)}
+        if field_toggles is not None:
+            params["fieldToggles"] = json.dumps(field_toggles)
+        response = self._client.get(url, params=params)
         self.requests_made += 1
 
         remaining = response.headers.get("x-rate-limit-remaining")
@@ -82,14 +96,6 @@ class ReadClient:
         if _has_auth_error(body):
             raise errors.SessionExpiredError()
         return body
-
-    @property
-    def http_client(self) -> httpx.Client:
-        """The underlying `httpx.Client` (same cookies/headers), for callers that
-        need to make a request `get()` doesn't shape -- e.g. `queryids.reanchor_via_main_js`,
-        which fetches x.com's HTML and JS bundle rather than a GraphQL endpoint.
-        """
-        return self._client
 
     def close(self) -> None:
         self._client.close()

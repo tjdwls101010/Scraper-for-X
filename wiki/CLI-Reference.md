@@ -16,7 +16,7 @@ Every subcommand below also accepts `-h`/`--help`.
 
 ## `login`
 
-One-time interactive login. Opens a real, visible Chromium window (a stealth `scrapling` browser session) at `https://x.com/home` and prints `A browser window should now be open. Log in to X there, then press Enter here to continue...`, then waits. Once you press Enter, it makes a couple of best-effort navigations (to `https://x.com/X` and a live search) purely to harvest more GraphQL query-ids/features from what gets captured, then extracts `auth_token`/`ct0` from the browser's cookie jar and persists the session (cookies, user agent, harvested query-ids/features) to disk under the named profile.
+One-time interactive login. Opens a real, visible Chromium window (a stealth `scrapling` browser session) at `https://x.com/home` and prints `A browser window should now be open. Log in to X there, then press Enter here to continue...`, then waits. Once you press Enter, it makes a few best-effort navigations (X's own profile, its replies tab, a live search, and whatever tweet it finds a link to on that search page) purely to harvest GraphQL query-ids/features for all four read ops (`UserTweets`, `UserTweetsAndReplies`, `SearchTimeline`, `TweetDetail`) from what gets captured, then extracts `auth_token`/`ct0` from the browser's cookie jar and persists the session (cookies, user agent, harvested query-ids/features) to disk under the named profile.
 
 Alternatively, `--cookies PATH` imports an already-exported cookie file instead of opening a browser at all — no `scrapling`/browser dependency needed for this path.
 
@@ -188,7 +188,7 @@ A bare all-digit token is treated as a numeric user **id** by default (X's `rest
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--replies` | off | Include replies (`UserTweetsAndReplies` instead of `UserTweets`). |
+| `--replies` | off | **Not yet implemented** (`UserTweetsAndReplies` requires a per-request, single-use `x-client-transaction-id` X's read GraphQL otherwise never needs — live-verified 2026-07-05; see [FAQ](FAQ-and-Troubleshooting.md)). Currently exits 1 with a clear `FeatureNotImplementedError` message before any network request. |
 | `--limit N` | none (unbounded) | Stop after this many (non-pinned) tweets. |
 | `--since YYYY-MM-DD` | none | Stop once a tweet older than this date is seen. Best-effort — see [`--since`/`--until` semantics](#--since---until-semantics-and-exit-code-7) below. |
 | `--until YYYY-MM-DD` | none | Skip tweets newer than this date (does not itself stop the run). |
@@ -211,8 +211,8 @@ If `--output` is omitted, the file is written under this package's own data dire
 # Last 30 tweets, defaults everywhere else.
 scrape-x fetch nasa --limit 30
 
-# Include replies, everything since a date, as NDJSON to a specific file.
-scrape-x fetch @nasa --replies --since 2026-04-01 --format ndjson --output ~/x-export.ndjson
+# Everything since a date, as NDJSON to a specific file (--replies not yet implemented, see below).
+scrape-x fetch @nasa --since 2026-04-01 --format ndjson --output ~/x-export.ndjson
 
 # A numeric-id profile.
 scrape-x fetch 11348282 --limit 10
@@ -241,7 +241,9 @@ scrape-x fetch nasa --limit 5 --raw -v
 
 ## `search`
 
-Tweets matching a query, including X's advanced search operators.
+**Not yet implemented in v0.1.0.** Live-verified 2026-07-05: X's `SearchTimeline` GraphQL operation requires a fresh, single-use `x-client-transaction-id` on every request — a captured value works exactly once and then 404s, so it cannot be harvested and replayed the way session cookies and query-ids are (unlike `UserTweets`/`TweetDetail`, both proven to work over plain `httpx` replay with no such header). Reproducing X's transaction-id generator is exactly the fragility this package's harvest-then-replay architecture was built to avoid. Running `scrape-x search` fails fast with a clear `FeatureNotImplementedError` message and exit code `1`, before any network request. See [FAQ-and-Troubleshooting.md](FAQ-and-Troubleshooting.md) for the roadmap (a browser-observe fallback for this op specifically).
+
+Tweets matching a query, including X's advanced search operators (once implemented).
 
 ```
 scrape-x search <query> [flags]
