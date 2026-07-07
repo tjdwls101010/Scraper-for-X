@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scraper-for-x"
-version = "0.1.0"
+version = "0.2.0"
 description = "Read-only scraping of logged-in X/Twitter data via a harvest-then-replay hybrid: a stealth-browser login harvests the session once, then reads are replayed over httpx. No client-transaction-id replay."
 readme = "README.md"
 license = "MIT"
@@ -38,6 +38,11 @@ dev = [
     "ruff>=0.8",
     "pre-commit>=3.8",
     "build>=1.2",
+    # Semantically validates `scrape-x schema --json` output (a valid draft
+    # 2020-12 schema) and that real fixture tweets conform to it -- the delegated
+    # contract the x-fetch skill reads. A declared dev dep so the test runs in CI
+    # instead of being importorskip'd away (see tests/test_model.py).
+    "jsonschema>=4.0",
 ]
 
 [project.urls]

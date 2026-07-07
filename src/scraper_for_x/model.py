@@ -149,6 +149,312 @@ class Tweet:
         }
 
 
+# --- output schema description (plan §10a) -------------------------------------
+#
+# One descriptions dict per output object, co-located with its dataclass so a
+# field rename/addition is edited in the same file as the field itself, not in
+# a separate skill repo. Each entry: (JSON type the output-file consumer sees,
+# one-line meaning). The JSON type is NOT the Python annotation — e.g.
+# ``created_at`` is ``datetime | None`` in Python but serializes to
+# ``string | null`` via ``_iso()``, and ``captured_at`` is ``datetime``
+# (non-optional, always set) serializing to a non-null ``string``.
+
+
+#: One entry per key ``Tweet.to_dict()`` can emit (24 always + ``raw`` under --raw).
+TWEET_FIELD_DESCRIPTIONS: dict[str, tuple[str, str]] = {
+    "id": (
+        "string",
+        "Stable rest_id — the dedup/merge key for this tweet. Dedupe on this, never on "
+        "captured_at.",
+    ),
+    "url": ("string | null", "Canonical https://x.com/<handle>/status/<id> link, or null."),
+    "created_at": (
+        "string | null",
+        "ISO-8601 UTC timestamp (with a 'Z' suffix) of when the tweet was posted; null if it "
+        "could not be parsed. --since/--until never compare a null-dated tweet.",
+    ),
+    "text": (
+        "string",
+        "Full tweet text; the long-form note_tweet body is preferred over the 280-char field. "
+        "For a retweet this is the RETWEETED ORIGINAL's text, not an 'RT @…' stub.",
+    ),
+    "lang": ("string | null", "X's detected language code for the tweet (e.g. 'en'), or null."),
+    "author": (
+        "object | null",
+        "The tweet's author as a nested User object (see the User section below), or null.",
+    ),
+    "is_reply": ("boolean", "True when the tweet is a reply to another tweet."),
+    "in_reply_to_id": (
+        "string | null",
+        "rest_id of the tweet this one replies to, or null when it is not a reply.",
+    ),
+    "conversation_id": (
+        "string | null",
+        "rest_id of the root tweet of this conversation/thread, or null.",
+    ),
+    "reply_count": ("integer | null", "Number of replies, or null if unavailable."),
+    "retweet_count": ("integer | null", "Number of retweets, or null if unavailable."),
+    "quote_count": ("integer | null", "Number of quote tweets, or null if unavailable."),
+    "like_count": ("integer | null", "Number of likes, or null if unavailable."),
+    "bookmark_count": ("integer | null", "Number of bookmarks, or null if unavailable."),
+    "view_count": (
+        "integer | null",
+        "View count as an integer, or null — the field is often absent (the raw payload "
+        "carries it as a string; it is converted here).",
+    ),
+    "media": (
+        "array<object>",
+        "List of Media objects (see the Media section below). Each url is a "
+        "pbs.twimg.com/video.twimg.com link — treat as sensitive, never print unredacted.",
+    ),
+    "urls": ("array<string>", "Expanded (non-t.co) URLs linked from the tweet."),
+    "hashtags": ("array<string>", "Hashtag texts in the tweet, without the leading '#'."),
+    "is_note_tweet": (
+        "boolean",
+        "True when text came from the long-form note_tweet body rather than the 280-char field.",
+    ),
+    "is_pinned": (
+        "boolean",
+        "True for a pinned tweet. Pinned tweets arrive out of chronological order and bypass "
+        "--since/--until (they are always returned).",
+    ),
+    "retweeted_tweet": (
+        "object | null",
+        "The retweeted original as a nested Tweet, or null. Nesting can go deeper than one "
+        "level (the serializer recurses), so a retweet-of-a-quote carries its own nested tweets.",
+    ),
+    "quoted_tweet": (
+        "object | null",
+        "The quoted tweet as a nested Tweet, or null. Like retweeted_tweet, can nest deeper "
+        "than one level.",
+    ),
+    "is_restricted": (
+        "boolean",
+        "True when the tweet arrived wrapped as TweetWithVisibilityResults "
+        "(subscriber-only / visibility-limited).",
+    ),
+    "captured_at": (
+        "string",
+        "ISO-8601 UTC timestamp of when this tool captured the tweet. Always present; changes "
+        "every run — never a dedup key.",
+    ),
+    "raw": (
+        "object",
+        "Present only when --raw was passed. The raw tweet_results.result node, redacted by "
+        "default unless --no-redact was also passed.",
+    ),
+}
+
+#: One entry per key ``User.to_dict()`` emits (all 10 unconditional).
+USER_FIELD_DESCRIPTIONS: dict[str, tuple[str, str]] = {
+    "id": ("string", "Stable rest_id of the user."),
+    "screen_name": ("string", "The @handle, without the leading '@'."),
+    "name": ("string | null", "Display name, or null."),
+    "created_at": (
+        "string | null",
+        "ISO-8601 UTC timestamp of when the account was created, or null.",
+    ),
+    "followers_count": ("integer | null", "Follower count, or null if unavailable."),
+    "following_count": ("integer | null", "Following count, or null if unavailable."),
+    "tweet_count": ("integer | null", "Total tweets posted by the account, or null."),
+    "is_blue_verified": (
+        "boolean | null",
+        "True if X Premium (blue) verified, or null if unknown.",
+    ),
+    "description": ("string | null", "The account bio text, or null."),
+    "url": ("string | null", "The profile's website URL, or null."),
+}
+
+#: One entry per key ``Media.to_dict()`` emits (all 5 unconditional). ``width``/
+#: ``height``/``alt_text`` have dataclass defaults but ``to_dict()`` always emits
+#: them — a "has-a-default ⇒ optional key" heuristic would mis-document them,
+#: which is exactly why ``*_schema_fields`` anchors on ``to_dict()`` keys, not
+#: ``dataclasses.fields`` (plan §10a Part B).
+MEDIA_FIELD_DESCRIPTIONS: dict[str, tuple[str, str]] = {
+    "kind": ("string", "One of photo | video | animated_gif | unknown."),
+    "url": (
+        "string",
+        "A pbs.twimg.com / video.twimg.com media URL — treat as sensitive, never print unredacted.",
+    ),
+    "width": ("integer | null", "Original media width in pixels, or null."),
+    "height": ("integer | null", "Original media height in pixels, or null."),
+    "alt_text": ("string | null", "Author-provided alt text, or null."),
+}
+
+
+def _schema_representative_media() -> Media:
+    return Media(kind="photo", url="", width=None, height=None, alt_text=None)
+
+
+def _schema_representative_user() -> User:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    return User(
+        id="1",
+        screen_name="",
+        name=None,
+        created_at=now,
+        followers_count=None,
+        following_count=None,
+        tweet_count=None,
+        is_blue_verified=None,
+        description=None,
+        url=None,
+    )
+
+
+def _schema_representative_tweet() -> Tweet:
+    """A fully-populated ``Tweet`` (including ``raw``) purely so ``to_dict()``
+    emits every possible key — the source of truth for ``tweet_schema_fields``.
+
+    Deliberately NOT ``dataclasses.fields(Tweet)``: that returns 25 names
+    including ``raw`` unconditionally, but ``to_dict()`` only emits ``raw``
+    when it is populated (i.e. only under ``--raw``), so fields() would
+    mis-document it as always-present.
+    """
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    return Tweet(
+        id="1",
+        url=None,
+        created_at=now,
+        text="",
+        lang=None,
+        author=None,
+        is_reply=False,
+        in_reply_to_id=None,
+        conversation_id=None,
+        reply_count=None,
+        retweet_count=None,
+        quote_count=None,
+        like_count=None,
+        bookmark_count=None,
+        view_count=None,
+        media=[],
+        urls=[],
+        hashtags=[],
+        is_note_tweet=False,
+        is_pinned=False,
+        retweeted_tweet=None,
+        quoted_tweet=None,
+        is_restricted=False,
+        captured_at=now,
+        raw={},
+    )
+
+
+def _schema_fields(
+    keys: list[str],
+    descriptions: dict[str, tuple[str, str]],
+    *,
+    optional: frozenset[str] = frozenset(),
+) -> list[dict]:
+    """Field descriptors for every ``key`` (in ``to_dict()`` order). Each entry:
+    ``name``, ``type`` (JSON type, not the Python annotation), ``description``,
+    and ``always_present`` (False only for keys in ``optional``)."""
+    return [
+        {
+            "name": key,
+            "type": descriptions[key][0],
+            "description": descriptions[key][1],
+            "always_present": key not in optional,
+        }
+        for key in keys
+    ]
+
+
+def tweet_schema_fields() -> list[dict]:
+    keys = list(_schema_representative_tweet().to_dict().keys())
+    return _schema_fields(keys, TWEET_FIELD_DESCRIPTIONS, optional=frozenset({"raw"}))
+
+
+def user_schema_fields() -> list[dict]:
+    keys = list(_schema_representative_user().to_dict().keys())
+    return _schema_fields(keys, USER_FIELD_DESCRIPTIONS)
+
+
+def media_schema_fields() -> list[dict]:
+    keys = list(_schema_representative_media().to_dict().keys())
+    return _schema_fields(keys, MEDIA_FIELD_DESCRIPTIONS)
+
+
+#: Maps this module's JSON-type labels to JSON Schema (draft 2020-12) type
+#: constraints. Explicit table, not derived from the annotations — same reason
+#: ``*_schema_fields`` avoids ``dataclasses.fields``.
+_JSON_SCHEMA_TYPES: dict[str, dict] = {
+    "string": {"type": "string"},
+    "string | null": {"type": ["string", "null"]},
+    "boolean": {"type": "boolean"},
+    "boolean | null": {"type": ["boolean", "null"]},
+    "integer | null": {"type": ["integer", "null"]},
+    "array<string>": {"type": "array", "items": {"type": "string"}},
+    "array<object>": {"type": "array", "items": {"type": "object"}},
+    "object | null": {"type": ["object", "null"]},
+    "object": {"type": "object"},
+}
+
+#: Per-field JSON Schema overrides for Tweet's nested objects, so ``--json``
+#: emits real reusable references instead of a bare ``{"type": "object"}``:
+#: ``author`` -> User $def, ``media`` items -> Media $def, and
+#: ``retweeted_tweet``/``quoted_tweet`` -> the root Tweet schema (self-recursive,
+#: matching the serializer's own recursion).
+_TWEET_REF_OVERRIDES: dict[str, dict] = {
+    "author": {"anyOf": [{"$ref": "#/$defs/User"}, {"type": "null"}]},
+    "media": {"type": "array", "items": {"$ref": "#/$defs/Media"}},
+    "retweeted_tweet": {"anyOf": [{"$ref": "#"}, {"type": "null"}]},
+    "quoted_tweet": {"anyOf": [{"$ref": "#"}, {"type": "null"}]},
+}
+
+
+def _json_properties(fields: list[dict], *, ref_overrides: dict[str, dict] | None = None) -> dict:
+    ref_overrides = ref_overrides or {}
+    properties: dict[str, dict] = {}
+    for field in fields:
+        if field["name"] in ref_overrides:
+            prop = dict(ref_overrides[field["name"]])
+        else:
+            prop = dict(_JSON_SCHEMA_TYPES[field["type"]])
+        prop["description"] = field["description"]
+        properties[field["name"]] = prop
+    return properties
+
+
+def _json_required(fields: list[dict]) -> list[str]:
+    """Keys always present in the output (nullable ones are still required —
+    the key is present, its value is JSON null)."""
+    return [field["name"] for field in fields if field["always_present"]]
+
+
+def json_schema() -> dict:
+    """The fetch/tweet output element as JSON Schema (draft 2020-12).
+
+    Tweet is the top-level object; User and Media are reusable ``$defs``, and
+    ``retweeted_tweet``/``quoted_tweet`` self-reference the root — X's output
+    nests one level deeper than a flat record (plan §10a Part B).
+    """
+    tweet_fields = tweet_schema_fields()
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "Tweet",
+        "description": "One element of the fetch/tweet output array (or one NDJSON line).",
+        "type": "object",
+        "properties": _json_properties(tweet_fields, ref_overrides=_TWEET_REF_OVERRIDES),
+        "required": _json_required(tweet_fields),
+        "$defs": {
+            "User": {
+                "type": "object",
+                "description": "A tweet's author (Tweet.author).",
+                "properties": _json_properties(user_schema_fields()),
+                "required": _json_required(user_schema_fields()),
+            },
+            "Media": {
+                "type": "object",
+                "description": "One attachment (an element of Tweet.media).",
+                "properties": _json_properties(media_schema_fields()),
+                "required": _json_required(media_schema_fields()),
+            },
+        },
+    }
+
+
 # --- normalization: raw tweet_results.result dict -> Tweet ---------------------
 
 

@@ -171,3 +171,112 @@ def test_raw_opt_in_attaches_original_node(load_fixture):
     assert tweet.raw is not None
     assert tweet.raw["rest_id"] == "1001"
     assert tweet.to_dict()["raw"]["rest_id"] == "1001"
+
+
+# --- output-schema description (plan §10a) -------------------------------------
+
+
+def test_tweet_schema_fields_anchored_on_to_dict_not_dataclass_fields():
+    import dataclasses
+
+    fields = model.tweet_schema_fields()
+    names = [f["name"] for f in fields]
+    # Anchored on to_dict() OUTPUT keys (25 incl. raw), in to_dict order.
+    assert names == list(model._schema_representative_tweet().to_dict().keys())
+    assert len(names) == 25
+    # Exactly the 24 always-present keys match a to_dict() WITHOUT raw.
+    rep = model._schema_representative_tweet()
+    rep.raw = None
+    always = {f["name"] for f in fields if f["always_present"]}
+    assert always == set(rep.to_dict().keys())
+    assert len(always) == 24
+    # raw is the ONLY non-always-present key.
+    assert [f["name"] for f in fields if not f["always_present"]] == ["raw"]
+    # dataclasses.fields(Tweet) is 25 too but includes raw UNCONDITIONALLY --
+    # the whole point of anchoring on to_dict() is to NOT treat raw that way.
+    assert len(dataclasses.fields(model.Tweet)) == 25
+
+
+def test_user_and_media_schema_fields_anchored_on_to_dict():
+    unames = [f["name"] for f in model.user_schema_fields()]
+    assert unames == list(model._schema_representative_user().to_dict().keys())
+    assert len(unames) == 10
+    assert all(f["always_present"] for f in model.user_schema_fields())
+
+    mnames = [f["name"] for f in model.media_schema_fields()]
+    assert mnames == list(model._schema_representative_media().to_dict().keys())
+    assert len(mnames) == 5
+    # Media has dataclass defaults (width/height/alt_text) but to_dict() emits
+    # all 5 -- a "has-a-default => optional" heuristic would be wrong here.
+    assert all(f["always_present"] for f in model.media_schema_fields())
+
+
+def test_every_to_dict_key_has_a_description():
+    for fields in (
+        model.tweet_schema_fields(),
+        model.user_schema_fields(),
+        model.media_schema_fields(),
+    ):
+        for field in fields:
+            assert field["description"], field["name"]
+
+
+def test_captured_at_is_string_while_created_at_is_nullable():
+    # Regression guard: captured_at is ALWAYS set (datetime.now) so it serializes
+    # to a non-null string and is always present; created_at can be None. The two
+    # must NOT be grouped (the fb PLAN text carried exactly this latent error).
+    by_name = {f["name"]: f for f in model.tweet_schema_fields()}
+    assert by_name["captured_at"]["type"] == "string"
+    assert by_name["captured_at"]["always_present"] is True
+    assert by_name["created_at"]["type"] == "string | null"
+
+
+def test_schema_types_are_json_shapes_not_python_annotations():
+    by_name = {f["name"]: f for f in model.tweet_schema_fields()}
+    assert by_name["media"]["type"] == "array<object>"  # not list[Media]
+    assert by_name["urls"]["type"] == "array<string>"  # not list[str]
+    assert by_name["author"]["type"] == "object | null"  # not User | None
+    assert by_name["view_count"]["type"] == "integer | null"  # JSON int, though raw is a str
+    assert {f["name"]: f["type"] for f in model.user_schema_fields()}[
+        "is_blue_verified"
+    ] == "boolean | null"
+
+
+def test_json_schema_uses_defs_and_refs_for_nested_objects():
+    js = model.json_schema()
+    assert js["title"] == "Tweet"
+    assert set(js["$defs"]) == {"User", "Media"}
+    assert js["properties"]["author"]["anyOf"][0]["$ref"] == "#/$defs/User"
+    assert js["properties"]["media"]["items"]["$ref"] == "#/$defs/Media"
+    # retweeted/quoted are nested Tweets -> self-reference the root schema.
+    assert js["properties"]["retweeted_tweet"]["anyOf"][0]["$ref"] == "#"
+    assert js["properties"]["quoted_tweet"]["anyOf"][0]["$ref"] == "#"
+    # captured_at required (always present); raw is not.
+    assert "captured_at" in js["required"]
+    assert "raw" not in js["required"]
+
+
+def test_json_schema_is_valid_and_real_tweets_conform(load_fixture):
+    # jsonschema is a declared dev dependency (pyproject [dev] + requirements-dev.lock)
+    # so this runs in CI. A plain import (not importorskip) is deliberate: this is the
+    # ONLY semantic guard of the schema the x-fetch skill delegates to, so a missing
+    # jsonschema must fail loudly, never silently skip.
+    import jsonschema
+
+    js = model.json_schema()
+    jsonschema.Draft202012Validator.check_schema(js)  # the schema itself is valid
+    validator = jsonschema.Draft202012Validator(js)
+    seen = 0
+    for name, op in (("user_tweets.json", "UserTweets"), ("tweet_detail.json", "TweetDetail")):
+        raw_tweets, _ = parse.walk_instructions(load_fixture(name), op)
+        for raw, is_pinned in raw_tweets:
+            for use_raw in (False, True):
+                tweet = model.build_tweet(
+                    raw, is_pinned=is_pinned, captured_at=datetime.now(UTC), raw=use_raw
+                )
+                if tweet is None:
+                    continue
+                errors = sorted(validator.iter_errors(tweet.to_dict()), key=str)
+                assert not errors, [e.message for e in errors]
+            seen += 1
+    assert seen > 0

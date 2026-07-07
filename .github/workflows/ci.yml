@@ -85,3 +85,7 @@ jobs:
         run: |
           smoke-venv/bin/scrape-x --version
           smoke-venv/bin/scrape-x --help
+          # `schema` is offline + base-install-safe (no scrapling): proves the
+          # base wheel can emit the output schema the x-fetch skill delegates to.
+          smoke-venv/bin/scrape-x schema
+          smoke-venv/bin/scrape-x schema --json

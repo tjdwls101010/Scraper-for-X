@@ -8,6 +8,7 @@
 # (plan §13/§14 G-lazy-import). `scrapling[fetchers]` lives solely under the
 # `[browser]` extra in pyproject.toml.
 anyio==4.14.1
+attrs==26.1.0
 build==1.5.0
 certifi==2026.6.17
 cfgv==3.5.0
@@ -19,6 +20,8 @@ httpx==0.28.1
 identify==2.6.19
 idna==3.18
 iniconfig==2.3.0
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
 nodeenv==1.10.0
 packaging==26.2
 platformdirs==4.10.0
@@ -29,6 +32,8 @@ pyproject-hooks==1.2.0
 pytest==9.1.1
 python-discovery==1.4.3
 pyyaml==6.0.3
+referencing==0.37.0
+rpds-py==2026.6.3
 ruff==0.15.20
 typing-extensions==4.16.0
 virtualenv==21.5.1

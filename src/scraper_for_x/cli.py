@@ -12,7 +12,6 @@ from pathlib import Path
 from . import __version__, auth, client, redact, retrieve, session
 from .config import DEFAULT_PROFILE_NAME, default_output_dir
 from .errors import (
-    FeatureNotImplementedError,
     InvalidCookieError,
     InvalidIdentifierError,
     LoginRequiredError,
@@ -21,7 +20,13 @@ from .errors import (
     RateLimitedError,
     SessionExpiredError,
 )
-from .model import Tweet
+from .model import (
+    Tweet,
+    json_schema,
+    media_schema_fields,
+    tweet_schema_fields,
+    user_schema_fields,
+)
 from .parse import EnvelopeParseError
 
 
@@ -49,6 +54,27 @@ def _until_datetime(value: date | None) -> datetime | None:
     return datetime(value.year, value.month, value.day, 23, 59, 59, 999999, tzinfo=UTC)
 
 
+_PROFILE_DIR_HELP = (
+    "Override where this profile's session credential lives "
+    "(default: platform data dir, or $SFX_PROFILE_DIR)."
+)
+
+#: Shown both in the top-level subcommand list (help=) and in `scrape-x search
+#: --help` (description=). Coupled to `_cmd_search`'s actual exit-1 rejection by
+#: a test so the marker can't rot if the op is ever implemented (plan §10a).
+_SEARCH_NOT_IMPLEMENTED = (
+    "NOT IMPLEMENTED in this version — errors out (exit 1). X's SearchTimeline needs a "
+    "fresh, single-use x-client-transaction-id per request that this harvest-then-replay "
+    "design cannot mint; there is no working substitute."
+)
+
+_FETCH_REPLIES_NOT_IMPLEMENTED = (
+    "NOT IMPLEMENTED in this version — errors out (exit 1). X's UserTweetsAndReplies needs a "
+    "fresh, single-use x-client-transaction-id per request. For one tweet's thread, use: "
+    "scrape-x tweet <id> --replies."
+)
+
+
 class _ArgumentParser(argparse.ArgumentParser):
     """Usage errors exit 1, not argparse's default 2 -- 2 already means
     "login required/expired/soft-locked" in this CLI's exit-code contract
@@ -61,19 +87,58 @@ class _ArgumentParser(argparse.ArgumentParser):
 
 
 def _add_common_fetch_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--format", choices=["json", "ndjson"], default="json")
-    parser.add_argument("--output", default=None)
-    parser.add_argument("--wait-on-limit", action="store_true")
-    parser.add_argument("--max-wait", type=float, default=None)
-    parser.add_argument("--profile", default=DEFAULT_PROFILE_NAME)
-    parser.add_argument("--profile-dir", default=None)
-    parser.add_argument("--raw", action="store_true")
+    parser.add_argument(
+        "--format",
+        choices=["json", "ndjson"],
+        default="json",
+        help="A single JSON array, or one NDJSON object per line (default: json).",
+    )
+    parser.add_argument(
+        "--output",
+        default=None,
+        help=(
+            "Where to write results (default: a timestamped file under the "
+            "platform data dir, not cwd)."
+        ),
+    )
+    parser.add_argument(
+        "--wait-on-limit",
+        action="store_true",
+        help="On a 429, sleep until the rate-limit window resets instead of exiting 3.",
+    )
+    parser.add_argument(
+        "--max-wait",
+        type=float,
+        default=None,
+        help="Cap a --wait-on-limit sleep, in seconds (default: unbounded).",
+    )
+    parser.add_argument(
+        "--profile",
+        default=DEFAULT_PROFILE_NAME,
+        help="Named login session to use (default: 'default').",
+    )
+    parser.add_argument("--profile-dir", default=None, help=_PROFILE_DIR_HELP)
+    parser.add_argument(
+        "--raw",
+        action="store_true",
+        help=(
+            "Attach the raw tweet_results.result node to each tweet (redacted unless --no-redact)."
+        ),
+    )
     parser.add_argument(
         "--no-redact",
         action="store_true",
         help="Disable PII scrubbing on --raw output (prints an on-screen warning).",
     )
-    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help=(
+            "Print the full (still redaction-scrubbed) error text instead of "
+            "just the exception type name."
+        ),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -84,8 +149,12 @@ def build_parser() -> argparse.ArgumentParser:
     login_p = subparsers.add_parser(
         "login", help="Log in (headed stealth browser by default, or --cookies)."
     )
-    login_p.add_argument("--profile", default=DEFAULT_PROFILE_NAME)
-    login_p.add_argument("--profile-dir", default=None)
+    login_p.add_argument(
+        "--profile",
+        default=DEFAULT_PROFILE_NAME,
+        help="Named login session to save (default: 'default').",
+    )
+    login_p.add_argument("--profile-dir", default=None, help=_PROFILE_DIR_HELP)
     login_p.add_argument(
         "--cookies",
         default=None,
@@ -93,9 +162,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     status_p = subparsers.add_parser("status", help="Check whether a profile is logged in.")
-    status_p.add_argument("--profile", default=DEFAULT_PROFILE_NAME)
-    status_p.add_argument("--profile-dir", default=None)
-    status_p.add_argument("--json", action="store_true")
+    status_p.add_argument(
+        "--profile",
+        default=DEFAULT_PROFILE_NAME,
+        help="Named login session to check (default: 'default').",
+    )
+    status_p.add_argument("--profile-dir", default=None, help=_PROFILE_DIR_HELP)
+    status_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON to stdout instead of a human summary to stderr.",
+    )
 
     setup_p = subparsers.add_parser(
         "setup", help="Provision the login browser into an isolated cache."
@@ -107,24 +184,65 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_p = subparsers.add_parser(
         "doctor", help="Authenticated round-trip + query-id freshness check."
     )
-    doctor_p.add_argument("--profile", default=DEFAULT_PROFILE_NAME)
-    doctor_p.add_argument("--profile-dir", default=None)
+    doctor_p.add_argument(
+        "--profile",
+        default=DEFAULT_PROFILE_NAME,
+        help="Named login session to check (default: 'default').",
+    )
+    doctor_p.add_argument("--profile-dir", default=None, help=_PROFILE_DIR_HELP)
     doctor_p.add_argument(
         "--refresh",
         action="store_true",
         help="Also re-anchor query-ids via x.com's main.js (browser-free).",
     )
 
+    schema_p = subparsers.add_parser(
+        "schema",
+        help="Print the fetch/tweet output object schema (offline, no login needed).",
+    )
+    schema_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit JSON Schema (draft 2020-12) instead of a plain annotated listing.",
+    )
+
     fetch_p = subparsers.add_parser("fetch", help="A profile's tweets/replies/media.")
     fetch_p.add_argument("identifier", help="@handle, bare username, numeric id, or profile URL.")
-    fetch_p.add_argument("--replies", action="store_true")
-    fetch_p.add_argument("--limit", type=int, default=None)
-    fetch_p.add_argument("--since", type=_parse_iso_date, default=None)
-    fetch_p.add_argument("--until", type=_parse_iso_date, default=None)
-    fetch_p.add_argument("--by", choices=["screen_name", "id"], default=None)
+    fetch_p.add_argument("--replies", action="store_true", help=_FETCH_REPLIES_NOT_IMPLEMENTED)
+    fetch_p.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Stop after this many tweets (default: unbounded).",
+    )
+    fetch_p.add_argument(
+        "--since",
+        type=_parse_iso_date,
+        default=None,
+        help=(
+            "Keep tweets on/after this date YYYY-MM-DD; best-effort — if the run stops on "
+            "--limit or the request budget before reaching it, exit 7."
+        ),
+    )
+    fetch_p.add_argument(
+        "--until",
+        type=_parse_iso_date,
+        default=None,
+        help="Keep tweets on/before this date YYYY-MM-DD.",
+    )
+    fetch_p.add_argument(
+        "--by",
+        choices=["screen_name", "id"],
+        default=None,
+        help="How to read an all-digit identifier: numeric user id (default) or screen_name.",
+    )
     _add_common_fetch_args(fetch_p)
 
-    search_p = subparsers.add_parser("search", help="Tweets matching a query / advanced operators.")
+    search_p = subparsers.add_parser(
+        "search",
+        help=_SEARCH_NOT_IMPLEMENTED,
+        description=_SEARCH_NOT_IMPLEMENTED,
+    )
     search_p.add_argument("query")
     search_p.add_argument("--product", choices=["latest", "top"], default="latest")
     search_p.add_argument("--limit", type=int, default=None)
@@ -134,7 +252,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     tweet_p = subparsers.add_parser("tweet", help="One tweet plus its reply/conversation thread.")
     tweet_p.add_argument("identifier", help="Tweet URL or numeric tweet id.")
-    tweet_p.add_argument("--replies", action="store_true")
+    tweet_p.add_argument(
+        "--replies", action="store_true", help="Include the reply/conversation thread."
+    )
     _add_common_fetch_args(tweet_p)
 
     return parser
@@ -217,6 +337,31 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         return 1
     print(redact.redact_raw_text(message), file=sys.stderr)
     return 0 if ok else 1
+
+
+def _print_schema_object(title: str, where: str, fields: list[dict]) -> None:
+    print(f"{title} — {where}:\n")
+    for field in fields:
+        note = "" if field["always_present"] else " (only present with --raw)"
+        print(f"  {field['name']} : {field['type']}{note}")
+        print(f"      {field['description']}")
+    print()
+
+
+def _cmd_schema(args: argparse.Namespace) -> int:
+    if args.json:
+        print(json.dumps(json_schema(), indent=2))
+        return 0
+    print(
+        "scrape-x output schema — `fetch`/`tweet` write a JSON array of Tweet objects "
+        "(one per line with --format ndjson).\n"
+        "Nested objects: Tweet.author is a User; Tweet.media[] are Media; "
+        "Tweet.retweeted_tweet / Tweet.quoted_tweet are nested Tweets.\n"
+    )
+    _print_schema_object("Tweet", "one element of the output array", tweet_schema_fields())
+    _print_schema_object("User", "Tweet.author", user_schema_fields())
+    _print_schema_object("Media", "an element of Tweet.media", media_schema_fields())
+    return 0
 
 
 def _redact_raw_recursive(tweet: Tweet) -> None:
@@ -320,9 +465,6 @@ def _handle_common_errors(exc: Exception, args: argparse.Namespace) -> int:
     if isinstance(exc, InvalidIdentifierError):
         print(f"invalid identifier: {exc}", file=sys.stderr)
         return 1
-    if isinstance(exc, FeatureNotImplementedError):
-        print(f"not yet implemented: {exc}", file=sys.stderr)
-        return 1
     return -1
 
 
@@ -340,6 +482,15 @@ def _load_read_client(args: argparse.Namespace) -> tuple[client.ReadClient, dict
 
 
 def _cmd_fetch(args: argparse.Namespace) -> int:
+    if args.replies:
+        # NOT IMPLEMENTED (plan §10a): UserTweetsAndReplies needs a fresh,
+        # single-use x-client-transaction-id per request. Reject here, ahead of
+        # _load_read_client, so a logged-out user gets exit 1 (the feature does
+        # not exist) rather than exit 2 (told to log in for a feature that does
+        # not exist). The working `fetch` (no --replies) path is untouched.
+        print(f"not implemented: {_FETCH_REPLIES_NOT_IMPLEMENTED}", file=sys.stderr)
+        return 1
+
     try:
         kind, value = auth.normalize_identifier(args.identifier, by=args.by)
     except InvalidIdentifierError as exc:
@@ -385,41 +536,15 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
 
 
 def _cmd_search(args: argparse.Namespace) -> int:
-    loaded = _load_read_client(args)
-    if isinstance(loaded, int):
-        return loaded
-    read_client, query_ids, features = loaded
-
-    try:
-        result = retrieve.search(
-            read_client,
-            query_ids,
-            features,
-            args.query,
-            product=args.product.capitalize(),
-            limit=args.limit,
-            since=_since_datetime(args.since),
-            until=_until_datetime(args.until),
-            wait_on_limit=args.wait_on_limit,
-            max_wait=args.max_wait,
-            raw=args.raw,
-        )
-    except Exception as exc:  # noqa: BLE001 - dispatched by type below
-        exit_code = _handle_common_errors(exc, args)
-        if exit_code != -1:
-            return exit_code
-        if args.verbose:
-            print(redact.redact_raw_text(f"unexpected error: {exc}"), file=sys.stderr)
-        else:
-            print(
-                f"unexpected error: {type(exc).__name__} (rerun with -v for details)",
-                file=sys.stderr,
-            )
-        return 1
-    finally:
-        read_client.close()
-
-    return _finish(result, args.query, args)
+    # NOT IMPLEMENTED (plan §10a): SearchTimeline needs a fresh, single-use
+    # x-client-transaction-id per request that this harvest-then-replay design
+    # cannot mint. Reject before loading the session (via _load_read_client) so
+    # a logged-out user gets exit 1 (the feature does not exist), not exit 2
+    # (told to log in for a feature that does not exist). No working substitute.
+    # retrieve.search() still raises FeatureNotImplementedError for Python-API
+    # callers; a test couples this marker to that behavior so it can't rot.
+    print(f"not implemented: {_SEARCH_NOT_IMPLEMENTED}", file=sys.stderr)
+    return 1
 
 
 def _cmd_tweet(args: argparse.Namespace) -> int:
@@ -468,6 +593,7 @@ _HANDLERS = {
     "status": _cmd_status,
     "setup": _cmd_setup,
     "doctor": _cmd_doctor,
+    "schema": _cmd_schema,
     "fetch": _cmd_fetch,
     "search": _cmd_search,
     "tweet": _cmd_tweet,
