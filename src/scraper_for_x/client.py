@@ -1,19 +1,23 @@
 """Read client: fires X's internal GraphQL reads over ``httpx`` (plan §8).
 
-This is the proven, live-tested request shape only -- no ``x-client-transaction-id``
-(§17 G-no-txid), no retry/backoff logic. Pacing and the request budget stop-reason
-decision belong to ``retrieve.py``; this module just executes one read and reports
-what happened.
+The proven, live-tested request shape only -- no retry/backoff logic. Pacing and
+the request budget stop-reason decision belong to ``retrieve.py``; this module
+just executes one read and reports what happened.
+
+Most ops need no ``x-client-transaction-id``. The three that do
+(``transaction.GATED_OPS``) get a freshly minted one per request, injected here;
+every other op must NOT send the header (see ``transaction`` for why).
 """
 
 from __future__ import annotations
 
 import json
 import time
+from urllib.parse import urlsplit
 
 import httpx
 
-from . import config, errors, gql
+from . import config, errors, gql, transaction
 
 
 class ReadClient:
@@ -38,6 +42,10 @@ class ReadClient:
         self.last_rate_limit_remaining: int | None = None
         self.last_rate_limit_reset: int | None = None
 
+        # Built lazily on the first gated op, so a run that only touches
+        # ungated ops never pays for the extra page fetches.
+        self._transaction = transaction.ClientTransaction(auth_token, ct0, user_agent)
+
         self._client = httpx.Client(
             headers={
                 "authorization": f"Bearer {gql.BEARER_TOKEN}",
@@ -47,10 +55,21 @@ class ReadClient:
                 "x-twitter-active-user": "yes",
                 "x-twitter-client-language": "en",
                 "user-agent": user_agent,
-                # Deliberately NOT setting x-client-transaction-id: proven unnecessary
-                # for X's read GraphQL (§17 G-no-txid). Do not add it back.
+                # x-client-transaction-id is deliberately NOT set here: it is
+                # per-request and single-use, so it is injected per call in
+                # _txid_header() for gated ops only -- never as a shared default.
             },
         )
+
+    def _txid_header(self, operation: str, url: str, method: str) -> dict[str, str]:
+        """A freshly minted transaction-id header, or ``{}`` for ungated ops.
+
+        The id signs the request path, so it must be minted per call and never
+        reused -- X spends it on first use.
+        """
+        if operation not in transaction.GATED_OPS:
+            return {}
+        return {"x-client-transaction-id": self._transaction.generate(method, urlsplit(url).path)}
 
     def get(
         self,
@@ -75,7 +94,9 @@ class ReadClient:
         params = {"variables": json.dumps(variables), "features": json.dumps(features)}
         if field_toggles is not None:
             params["fieldToggles"] = json.dumps(field_toggles)
-        response = self._client.get(url, params=params)
+        response = self._client.get(
+            url, params=params, headers=self._txid_header(operation, url, "GET")
+        )
         self.requests_made += 1
         return self._handle(response, operation)
 
@@ -103,7 +124,9 @@ class ReadClient:
         payload: dict = {"variables": variables, "features": features, "queryId": query_id}
         if field_toggles is not None:
             payload["fieldToggles"] = field_toggles
-        response = self._client.post(url, json=payload)
+        response = self._client.post(
+            url, json=payload, headers=self._txid_header(operation, url, "POST")
+        )
         self.requests_made += 1
         return self._handle(response, operation)
 
