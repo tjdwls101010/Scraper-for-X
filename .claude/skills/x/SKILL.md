@@ -19,7 +19,7 @@ scrape-x catalog | python3 -c "import json,sys; print(json.load(sys.stdin)['vers
 curl -s https://pypi.org/simple/scraper-for-x/ | grep -oE 'scraper_for_x-[0-9]+\.[0-9]+\.[0-9]+' | sed 's/.*-//' | sort -V | tail -1
 ```
 
-Note `catalog` takes **no `--json` flag** — it always emits JSON. (`schema` does take one. The asymmetry is a wart; don't let it convince you the command is missing.)
+`catalog` always emits JSON; `--json` is accepted but does nothing.
 
 If the installed version is behind, say so in one line and upgrade before doing the user's actual work — don't ask, and don't do it silently, because a mid-task version change has to be diagnosable if results look strange:
 

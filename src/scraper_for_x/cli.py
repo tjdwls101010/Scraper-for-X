@@ -214,7 +214,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Also re-anchor query-ids via x.com's main.js (browser-free).",
     )
 
-    subparsers.add_parser(
+    catalog_p = subparsers.add_parser(
         "catalog",
         help="Emit a machine-readable description of this CLI as JSON (offline).",
         description=(
@@ -222,6 +222,11 @@ def build_parser() -> argparse.ArgumentParser:
             "code as JSON, derived from the parser itself. Intended for agents driving "
             "scrape-x; pair it with `scrape-x schema --json` for the output shape."
         ),
+    )
+    catalog_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Accepted for symmetry with `schema --json`; this command is always JSON.",
     )
 
     schema_p = subparsers.add_parser(
@@ -546,6 +551,9 @@ def build_catalog() -> dict:
 
 
 def _cmd_catalog(args: argparse.Namespace) -> int:
+    # `args.json` is intentionally unused: this command has no non-JSON form.
+    # The flag exists only so that `catalog --json` -- the obvious thing to type
+    # next to `schema --json` -- does not fail with an argparse error.
     print(json.dumps(build_catalog(), indent=2))
     return 0
 

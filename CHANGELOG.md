@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-20
+
+### Fixed
+- `scrape-x catalog` now accepts `--json`. It always emitted JSON and took no flags, while its sibling `scrape-x schema` takes `--json` — so `catalog --json`, the obvious thing to type next to it, failed with an argparse error. That reads as "this command doesn't exist" rather than "that flag is redundant", and it broke the first version-check script written against the catalog. The flag is a no-op; `catalog` has no non-JSON form.
+
 ## [0.3.0] - 2026-07-20
 
 Widens the read surface from "one profile's tweets" to "the home feed, search, replies and the social graph", and gets past the `x-client-transaction-id` wall that made two of those impossible in 0.2.0.

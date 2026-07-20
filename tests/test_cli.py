@@ -233,3 +233,15 @@ def test_catalog_points_at_the_output_schema_command():
     """The two contracts are complementary: catalog = how to call it,
     schema --json = what comes back."""
     assert cli.build_catalog()["output_schema"] == "scrape-x schema --json"
+
+
+def test_catalog_accepts_json_flag_for_symmetry(capsys):
+    """`schema` takes --json, so `catalog --json` is the obvious thing to type
+    next to it. In 0.3.0 that failed with an argparse error, which reads as
+    "the command is missing" rather than "the flag is redundant" -- it broke a
+    version-check script written against it. The flag is a no-op: catalog has
+    no non-JSON form."""
+    assert cli.main(["catalog", "--json"]) == 0
+    with_flag = capsys.readouterr().out
+    assert cli.main(["catalog"]) == 0
+    assert json.loads(with_flag) == json.loads(capsys.readouterr().out)

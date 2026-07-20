@@ -58,7 +58,7 @@ This matters more for this package than it would for most, and that is the actua
 
 **D4 — no hooks, no permissions entries, no agents.** Nothing here needs deterministic enforcement: the package already clamps its own non-bypassable rate floor in code, and the destructive-action surface is empty (every command is read-only). Adding a hook would be enforcement theatre over a guarantee the package already makes itself.
 
-**D6 — a package defect found while generating this skill.** `scrape-x catalog` does not accept `--json` (it always emits JSON), while `scrape-x schema` does. Writing the version check against the natural-looking `catalog --json` failed immediately. The skill documents the asymmetry so it doesn't read as a missing command, but the wart belongs in the package: accepting a no-op `--json` on `catalog` would remove the trap. Filed for the next release, not patched here.
+**D6 — a package defect found while generating this skill.** `scrape-x catalog` does not accept `--json` (it always emits JSON), while `scrape-x schema` does. Writing the version check against the natural-looking `catalog --json` failed immediately. **Fixed in v0.3.1** rather than documented around: `catalog` now accepts `--json` as a no-op. The skill's note about the asymmetry was removed in the same pass, since keeping a warning about a wart that no longer exists is its own kind of drift.
 
 **D5 — scope note, not a blocker.** The skill lives in this repo's `.claude/`, so it only loads in sessions opened here — same as the fb sibling. Reading X is useful from any project; if the user wants it everywhere, copy the directory to `~/.claude/skills/x/`. Left as the user's call rather than assumed.
 
