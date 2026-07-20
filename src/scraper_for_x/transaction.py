@@ -68,7 +68,7 @@ from html.parser import HTMLParser
 
 import httpx
 
-from .errors import ScraperForXError
+from .errors import TransactionIdError
 
 #: The only ops that need the header, live-probed 2026-07-20. Everything else
 #: (``UserTweets``, ``TweetDetail``, ``HomeTimeline``, ``UserByScreenName``,
@@ -90,20 +90,6 @@ _INDICES_RE = re.compile(r"""(\(\w{1}\[(\d{1,2})\],\s*16\))+""")
 _VERIFICATION_RE = re.compile(
     r"""<meta[^>]+name=["']twitter-site-verification["'][^>]+content=["']([^"']+)["']"""
 )
-
-
-class TransactionIdError(ScraperForXError):
-    """A fresh ``x-client-transaction-id`` could not be generated.
-
-    Raised when x.com no longer serves an ingredient this algorithm needs (the
-    verification meta tag, the four ``loading-x-anim`` frames, or the
-    ``ondemand.s`` chunk with its key-byte indices) -- i.e. the reverse-
-    engineered algorithm has rotted, or the session can't load the page.
-
-    Distinct from a 404 on a gated op *after* a header was successfully
-    generated: that means the id was minted but X rejected it, which is the
-    signal to fall back to browser-observe rather than to re-port this module.
-    """
 
 
 class _FrameParser(HTMLParser):

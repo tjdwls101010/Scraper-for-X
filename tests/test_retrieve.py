@@ -1,8 +1,6 @@
 from datetime import UTC, datetime
 
-import pytest
-
-from scraper_for_x import errors, retrieve, session
+from scraper_for_x import errors, gql, retrieve, session
 
 
 def _tweet_entry(rest_id: str, created_at: str, *, text: str = "synthetic") -> dict:
@@ -57,13 +55,18 @@ class FakeReadClient:
         self._pages = list(pages)
         self.requests_made = 0
         self.methods_used: list[str] = []
+        #: (operation, variables, field_toggles) per call, so tests can assert
+        #: an op was addressed with the exact request shape X requires.
+        self.calls: list[tuple[str, dict, dict | None]] = []
 
     def get(self, query_id, operation, variables, features, field_toggles=None):
         self.methods_used.append("GET")
+        self.calls.append((operation, variables, field_toggles))
         return self._next_page()
 
     def post(self, query_id, operation, variables, features, field_toggles=None):
         self.methods_used.append("POST")
+        self.calls.append((operation, variables, field_toggles))
         return self._next_page()
 
     def _next_page(self):
@@ -298,31 +301,74 @@ def test_iter_user_tweets_streams_incrementally_not_all_at_once():
     assert client.requests_made == 2
 
 
-def test_search_raises_feature_not_implemented():
-    """Regression guard: live-verified 2026-07-05 that SearchTimeline requires
-    a single-use x-client-transaction-id per request, which this package's
-    harvest-then-replay architecture cannot reproduce -- search() must fail
-    fast with a clear, typed error, not a confusing 404 deep in client.py."""
-    client = FakeReadClient([])
-    with pytest.raises(errors.FeatureNotImplementedError):
-        retrieve.search(client, {}, {}, "hello")
-    assert client.requests_made == 0  # fails before making any request
+def _search_page(tweets: list[dict], cursor: str | None) -> dict:
+    """Same entries as `_page`, wrapped in SearchTimeline's envelope."""
+    inner = _page(tweets, cursor)
+    instructions = inner["data"]["user"]["result"]["timeline"]["timeline"]["instructions"]
+    return {
+        "data": {
+            "search_by_raw_query": {"search_timeline": {"timeline": {"instructions": instructions}}}
+        }
+    }
 
 
-def test_fetch_user_tweets_replies_raises_feature_not_implemented():
-    client = FakeReadClient([])
-    with pytest.raises(errors.FeatureNotImplementedError):
-        retrieve.fetch_user_tweets(client, {}, {}, "id", "123", replies=True)
-    assert client.requests_made == 0
+def test_search_returns_tweets():
+    """Inverted from v0.2.0, where this asserted FeatureNotImplementedError.
+    SearchTimeline is still behind X's transaction-id wall -- the difference is
+    that v0.3.0 mints the header per request (in client.ReadClient) instead of
+    giving up, so retrieve.search() is now an ordinary paginated read."""
+    client = FakeReadClient([_search_page([_tweet_entry("1", DAY1)], None)])
+    result = retrieve.search(client, {}, {}, "hello")
+    assert [t.id for t in result.tweets] == ["1"]
+    assert client.calls[0][0] == "SearchTimeline"
 
 
-def test_iter_user_tweets_replies_raises_feature_not_implemented_eagerly():
-    """`iter_user_tweets` is a plain function wrapping a generator (plan §5) --
-    confirm the guard fires at call time, not deferred to the first next()."""
-    client = FakeReadClient([])
-    with pytest.raises(errors.FeatureNotImplementedError):
-        retrieve.iter_user_tweets(client, {}, {}, "id", "123", replies=True)
-    assert client.requests_made == 0
+def test_search_passes_the_product_through():
+    client = FakeReadClient([_search_page([_tweet_entry("1", DAY1)], None)])
+    retrieve.search(client, {}, {}, "hello", product="Top")
+    assert client.calls[0][1]["product"] == "Top"
+
+
+def test_search_empty_result_is_no_matches_not_soft_locked():
+    """An empty search is a legitimate "nothing matched" (exit 0), not the
+    soft-lock probe path the profile timelines take."""
+    client = FakeReadClient([_search_page([], None)])
+    result = retrieve.search(client, {}, {}, "zzzz")
+    assert result.tweets == []
+    assert result.stop_reason == "no_matches"
+
+
+def test_fetch_user_tweets_replies_uses_the_replies_op():
+    """Inverted from v0.2.0's FeatureNotImplementedError guard. The replies
+    variant is a genuinely different op: different name, different variables,
+    and it needs fieldToggles that plain UserTweets must not send."""
+    client = FakeReadClient([_page([_tweet_entry("1", DAY1)], None)])
+    result = retrieve.fetch_user_tweets(client, {}, {}, "id", "123", replies=True)
+    assert [t.id for t in result.tweets] == ["1"]
+    operation, variables, field_toggles = client.calls[0]
+    assert operation == "UserTweetsAndReplies"
+    assert field_toggles == gql.USER_TWEETS_AND_REPLIES_FIELD_TOGGLES
+    # Live-captured: the replies variant adds withCommunity and must NOT carry
+    # withQuickPromoteEligibilityTweetFields, or X 404s it.
+    assert variables["withCommunity"] is True
+    assert "withQuickPromoteEligibilityTweetFields" not in variables
+
+
+def test_fetch_user_tweets_without_replies_sends_no_field_toggles():
+    """Negative control for the above -- plain UserTweets 404s if sent them."""
+    client = FakeReadClient([_page([_tweet_entry("1", DAY1)], None)])
+    retrieve.fetch_user_tweets(client, {}, {}, "id", "123", replies=False)
+    operation, variables, field_toggles = client.calls[0]
+    assert operation == "UserTweets"
+    assert field_toggles is None
+    assert variables["withQuickPromoteEligibilityTweetFields"] is True
+
+
+def test_iter_user_tweets_replies_streams():
+    client = FakeReadClient([_page([_tweet_entry("1", DAY1)], None)])
+    stream = retrieve.iter_user_tweets(client, {}, {}, "id", "123", replies=True)
+    assert [t.id for t in stream] == ["1"]
+    assert client.calls[0][0] == "UserTweetsAndReplies"
 
 
 def test_fetch_user_tweets_without_replies_is_unaffected():

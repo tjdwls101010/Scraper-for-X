@@ -275,29 +275,23 @@ def _user_tweets_op(
     """Shared setup for `fetch_user_tweets`/`iter_user_tweets`: resolve the
     target to a user id (raises `ProfileUnavailableError` eagerly if it
     can't be), then build the (operation, query_id, build_variables,
-    field_toggles) `paginate`/`paginate_iter` need. Plain `UserTweets` needs
-    no `field_toggles` (always `None` here).
+    field_toggles) `paginate`/`paginate_iter` need.
 
-    `replies=True` (`UserTweetsAndReplies`) raises `FeatureNotImplementedError`
-    -- live-verified 2026-07-05 that this op requires a single-use
-    `x-client-transaction-id` per request, which cannot be harvested once and
-    replayed like a session cookie or query-id (see that error's docstring).
+    The two variants are genuinely different ops with different variables and
+    different `field_toggles` (plain `UserTweets` needs none). `replies=True`
+    also crosses the transaction-id wall -- `client.ReadClient` mints the
+    header for `UserTweetsAndReplies` automatically, so nothing here has to
+    know about it.
     """
-    if replies:
-        raise errors.FeatureNotImplementedError(
-            "fetch_user_tweets(replies=True) / iter_user_tweets(replies=True) require "
-            "X's per-request x-client-transaction-id, which this package's "
-            "harvest-then-replay architecture does not reproduce (see "
-            "FeatureNotImplementedError's docstring). Not yet implemented."
-        )
     user_id = resolve_user_id(read_client, query_ids, features, kind, value)
-    operation = "UserTweets"
+    operation = "UserTweetsAndReplies" if replies else "UserTweets"
     query_id = query_ids.get(operation, queryids.DEFAULT_QUERY_IDS[operation])
+    field_toggles = gql.USER_TWEETS_AND_REPLIES_FIELD_TOGGLES if replies else None
 
     def build_variables(cursor: str | None) -> dict:
-        return gql.user_tweets_variables(user_id, cursor=cursor)
+        return gql.user_tweets_variables(user_id, cursor=cursor, include_replies=replies)
 
-    return operation, query_id, build_variables, None
+    return operation, query_id, build_variables, field_toggles
 
 
 def fetch_user_tweets(
@@ -454,15 +448,31 @@ def search(
 ) -> RetrieveResult:
     """Tweets matching a query / advanced operators (plan §1).
 
-    Raises `FeatureNotImplementedError` unconditionally -- live-verified
-    2026-07-05 that `SearchTimeline` requires a single-use
-    `x-client-transaction-id` per request (see that error's docstring); not
-    yet implemented.
+    `product` is "Latest" (reverse-chronological) or "Top" (X's ranking).
+
+    `SearchTimeline` is behind the transaction-id wall; `client.ReadClient`
+    mints the header for it automatically, so this reads like any other op.
     """
-    raise errors.FeatureNotImplementedError(
-        "search() requires X's per-request x-client-transaction-id, which this "
-        "package's harvest-then-replay architecture does not reproduce (see "
-        "FeatureNotImplementedError's docstring). Not yet implemented."
+    operation = "SearchTimeline"
+    query_id = query_ids.get(operation, queryids.DEFAULT_QUERY_IDS[operation])
+
+    def build_variables(cursor: str | None) -> dict:
+        return gql.search_timeline_variables(query, cursor=cursor, product=product)
+
+    return paginate(
+        read_client,
+        operation,
+        query_id,
+        features,
+        build_variables,
+        query_ids=query_ids,
+        limit=limit,
+        since=since,
+        until=until,
+        max_requests=max_requests,
+        wait_on_limit=wait_on_limit,
+        max_wait=max_wait,
+        raw=raw,
     )
 
 

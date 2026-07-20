@@ -32,6 +32,7 @@ from .errors import (
     ScraperForXError,
     SessionClosedError,
     SessionExpiredError,
+    TransactionIdError,
 )
 from .model import Media, Tweet, User
 from .parse import EnvelopeParseError
@@ -57,6 +58,7 @@ __all__ = [
     "SessionClosedError",
     "EnvelopeParseError",
     "FeatureNotImplementedError",
+    "TransactionIdError",
 ]
 
 

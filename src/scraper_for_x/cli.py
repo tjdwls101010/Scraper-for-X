@@ -19,6 +19,7 @@ from .errors import (
     ProfileUnavailableError,
     RateLimitedError,
     SessionExpiredError,
+    TransactionIdError,
 )
 from .model import (
     Tweet,
@@ -60,18 +61,18 @@ _PROFILE_DIR_HELP = (
 )
 
 #: Shown both in the top-level subcommand list (help=) and in `scrape-x search
-#: --help` (description=). Coupled to `_cmd_search`'s actual exit-1 rejection by
-#: a test so the marker can't rot if the op is ever implemented (plan §10a).
-_SEARCH_NOT_IMPLEMENTED = (
-    "NOT IMPLEMENTED in this version — errors out (exit 1). X's SearchTimeline needs a "
-    "fresh, single-use x-client-transaction-id per request that this harvest-then-replay "
-    "design cannot mint; there is no working substitute."
+#: --help` (description=). These two ops sit behind X's transaction-id wall; the
+#: header is generated per request (see transaction.py), which is the one
+#: reverse-engineered, rot-prone part of this package — so the help says so
+#: rather than promising more reliability than these commands have.
+_SEARCH_HELP = (
+    "Tweets matching a query / advanced operators. Needs a generated "
+    "x-client-transaction-id (reverse-engineered — may break when X changes it)."
 )
 
-_FETCH_REPLIES_NOT_IMPLEMENTED = (
-    "NOT IMPLEMENTED in this version — errors out (exit 1). X's UserTweetsAndReplies needs a "
-    "fresh, single-use x-client-transaction-id per request. For one tweet's thread, use: "
-    "scrape-x tweet <id> --replies."
+_FETCH_REPLIES_HELP = (
+    "Include the profile's replies (UserTweetsAndReplies). Needs a generated "
+    "x-client-transaction-id (reverse-engineered — may break when X changes it)."
 )
 
 
@@ -208,7 +209,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     fetch_p = subparsers.add_parser("fetch", help="A profile's tweets/replies/media.")
     fetch_p.add_argument("identifier", help="@handle, bare username, numeric id, or profile URL.")
-    fetch_p.add_argument("--replies", action="store_true", help=_FETCH_REPLIES_NOT_IMPLEMENTED)
+    fetch_p.add_argument("--replies", action="store_true", help=_FETCH_REPLIES_HELP)
     fetch_p.add_argument(
         "--limit",
         type=int,
@@ -267,8 +268,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     search_p = subparsers.add_parser(
         "search",
-        help=_SEARCH_NOT_IMPLEMENTED,
-        description=_SEARCH_NOT_IMPLEMENTED,
+        help=_SEARCH_HELP,
+        description=_SEARCH_HELP,
     )
     search_p.add_argument("query")
     search_p.add_argument("--product", choices=["latest", "top"], default="latest")
@@ -486,6 +487,17 @@ def _handle_common_errors(exc: Exception, args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 4
+    if isinstance(exc, TransactionIdError):
+        # Same exit code as an unparseable envelope, and for the same reason:
+        # what X serves no longer matches what this package expects. The
+        # message distinguishes the two, since the fix is different (re-port
+        # the generator vs re-anchor the query-ids).
+        print(
+            f"could not generate an x-client-transaction-id: {exc}. This affects "
+            "search / fetch --replies / followers only; other commands still work.",
+            file=sys.stderr,
+        )
+        return 4
     if isinstance(exc, (ProfileUnavailableError, NotFoundError)):
         print(str(exc), file=sys.stderr)
         return 5
@@ -509,15 +521,6 @@ def _load_read_client(args: argparse.Namespace) -> tuple[client.ReadClient, dict
 
 
 def _cmd_fetch(args: argparse.Namespace) -> int:
-    if args.replies:
-        # NOT IMPLEMENTED (plan §10a): UserTweetsAndReplies needs a fresh,
-        # single-use x-client-transaction-id per request. Reject here, ahead of
-        # _load_read_client, so a logged-out user gets exit 1 (the feature does
-        # not exist) rather than exit 2 (told to log in for a feature that does
-        # not exist). The working `fetch` (no --replies) path is untouched.
-        print(f"not implemented: {_FETCH_REPLIES_NOT_IMPLEMENTED}", file=sys.stderr)
-        return 1
-
     try:
         kind, value = auth.normalize_identifier(args.identifier, by=args.by)
     except InvalidIdentifierError as exc:
@@ -601,15 +604,43 @@ def _cmd_feed(args: argparse.Namespace) -> int:
 
 
 def _cmd_search(args: argparse.Namespace) -> int:
-    # NOT IMPLEMENTED (plan §10a): SearchTimeline needs a fresh, single-use
-    # x-client-transaction-id per request that this harvest-then-replay design
-    # cannot mint. Reject before loading the session (via _load_read_client) so
-    # a logged-out user gets exit 1 (the feature does not exist), not exit 2
-    # (told to log in for a feature that does not exist). No working substitute.
-    # retrieve.search() still raises FeatureNotImplementedError for Python-API
-    # callers; a test couples this marker to that behavior so it can't rot.
-    print(f"not implemented: {_SEARCH_NOT_IMPLEMENTED}", file=sys.stderr)
-    return 1
+    loaded = _load_read_client(args)
+    if isinstance(loaded, int):
+        return loaded
+    read_client, query_ids, features = loaded
+
+    try:
+        result = retrieve.search(
+            read_client,
+            query_ids,
+            features,
+            args.query,
+            # argparse takes the flag lowercase for ergonomics; X's variables
+            # want it capitalised ("Latest"/"Top").
+            product=args.product.capitalize(),
+            limit=args.limit,
+            since=_since_datetime(args.since),
+            until=_until_datetime(args.until),
+            wait_on_limit=args.wait_on_limit,
+            max_wait=args.max_wait,
+            raw=args.raw,
+        )
+    except Exception as exc:  # noqa: BLE001 - dispatched by type below
+        exit_code = _handle_common_errors(exc, args)
+        if exit_code != -1:
+            return exit_code
+        if args.verbose:
+            print(redact.redact_raw_text(f"unexpected error: {exc}"), file=sys.stderr)
+        else:
+            print(
+                f"unexpected error: {type(exc).__name__} (rerun with -v for details)",
+                file=sys.stderr,
+            )
+        return 1
+    finally:
+        read_client.close()
+
+    return _finish(result, args.query, args)
 
 
 def _cmd_tweet(args: argparse.Namespace) -> int:

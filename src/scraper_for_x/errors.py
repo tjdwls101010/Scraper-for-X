@@ -74,18 +74,31 @@ class SessionClosedError(ScraperForXError):
     """
 
 
-class FeatureNotImplementedError(ScraperForXError):
-    """This op requires X's ``x-client-transaction-id`` on every request.
+class TransactionIdError(ScraperForXError):
+    """A fresh ``x-client-transaction-id`` could not be generated.
 
-    Live-verified 2026-07-05: unlike ``UserTweets``/``TweetDetail`` (proven
-    to work over plain ``httpx`` replay), X's ``SearchTimeline`` and
-    ``UserTweetsAndReplies`` reject a request missing this header -- and the
-    header is single-use (replaying a captured value works exactly once,
-    then 404s on every subsequent request), so it cannot be harvested once
-    and replayed the way session cookies and query-ids are. Reproducing X's
-    transaction-id generator is exactly the fragility this package's
-    harvest-then-replay architecture was built to avoid (see twikit#408).
-    ``search()`` and ``fetch_user_tweets(replies=True)``/
-    ``iter_user_tweets(replies=True)`` raise this until a browser-observe
-    fallback is built for these two ops specifically (roadmap).
+    The three ops behind X's transaction-id wall (``SearchTimeline``,
+    ``UserTweetsAndReplies``, ``Followers``) need a freshly minted header on
+    every request. Minting it means reproducing an obfuscated client-side
+    algorithm from x.com's own page -- the one reverse-engineered, rot-prone
+    part of this package. This is raised when an ingredient that algorithm
+    needs is no longer served, i.e. X changed it.
+
+    Distinct from a 404 on a gated op *after* a header was generated: that
+    means the id was minted but rejected. See ``transaction.py``.
+    """
+
+
+class FeatureNotImplementedError(ScraperForXError):
+    """No shipped operation raises this any more; retained for compatibility.
+
+    Through v0.2.0 ``search()`` and ``fetch_user_tweets(replies=True)``/
+    ``iter_user_tweets(replies=True)`` raised this, because X's transaction-id
+    header is single-use and could not be harvested-and-replayed the way
+    session cookies and query-ids are. v0.3.0 generates the header per request
+    instead (see ``transaction.py``), so all three now work.
+
+    Kept exported so ``except FeatureNotImplementedError`` in existing callers
+    keeps importing; it is simply never raised. It will be removed in the next
+    major version.
     """
