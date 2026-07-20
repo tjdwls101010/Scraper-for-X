@@ -2,14 +2,15 @@
 
 Everything in this page is importable from the top-level `scraper_for_x` package. If you only need the CLI, see [CLI Reference](CLI-Reference.md) instead — this page is for embedding scraping into your own Python code.
 
-Read [DISCLAIMER.md](../DISCLAIMER.md) before writing anything that calls this on an account you care about.
+Read [DISCLAIMER.md](../../DISCLAIMER.md) before writing anything that calls this on an account you care about.
 
 ```python
 from scraper_for_x import (
     XScraper, Tweet, User, Media, Status, RetrieveResult,
     ScraperForXError, LoginRequiredError, SessionExpiredError, RateLimitedError,
     ProfileUnavailableError, NotFoundError, InvalidCookieError, InvalidIdentifierError,
-    NotEnteredError, SessionClosedError,
+    NotEnteredError, SessionClosedError, EnvelopeParseError,
+    TransactionIdError, GatedOpRejectedError, BrowserFallbackError,
 )
 ```
 
@@ -21,8 +22,10 @@ from scraper_for_x import (
 - [status()](#status)
 - [fetch_user_tweets()](#fetch_user_tweets)
 - [iter_user_tweets()](#iter_user_tweets)
+- [fetch_home()](#fetch_home)
 - [search()](#search)
 - [fetch_tweet()](#fetch_tweet)
+- [The social graph: fetch_following() / fetch_followers() / fetch_retweeters()](#the-social-graph)
 - [Tweet / User / Media](#tweet--user--media)
 - [Exceptions](#exceptions)
 
@@ -97,7 +100,7 @@ Entering the `with` block loads the persisted session (raising [`LoginRequiredEr
 
 | Parameter | Default | Meaning |
 |---|---|---|
-| `profile` | `"default"` | Name of the persisted login profile to use. Maps to a directory under this tool's data dir (see [Configuration](Configuration.md#profiles)) unless `profile_dir` overrides it. Passed positionally or by keyword. |
+| `profile` | `"default"` | Name of the persisted login profile to use. Maps to a directory under this tool's data dir (see [Configuration](Configuration.md#login-profiles)) unless `profile_dir` overrides it. Passed positionally or by keyword. |
 | `profile_dir` | `None` | Explicit override for where the profile (session credential + browser data) lives on disk. `None` means "resolve from `profile` using the normal lookup" (env var, then the platform data directory). Accepts a `str` or a `pathlib.Path`. |
 | `min_request_pause` | `None` | Minimum seconds to pace between reads. `None` uses the tool's default human-pause floor. Any value at or below `0.5s` is silently clamped up to `0.5s` (with a stderr note) — this is the one non-bypassable guardrail in the tool. |
 | `max_requests` | `None` | Hard cap on GraphQL requests made by any single read call (`fetch_user_tweets`, `iter_user_tweets`, `search`, `fetch_tweet`). `None` falls back to a default budget of 500. Hitting the cap mid-pagination stops with `stop_reason == "max_requests"` rather than raising. |
@@ -214,7 +217,7 @@ A profile's tweets (or tweets + replies), deep via cursor pagination. Materializ
 **Parameters:**
 
 - `identifier` — `@handle`, bare username, numeric user id, or a full `x.com`/`twitter.com` profile URL. Normalized and validated before any request is made; an unparseable value raises [`InvalidIdentifierError`](#invalididentifiererror) immediately.
-- `replies` — **not yet implemented**: `replies=True` raises [`FeatureNotImplementedError`](#featurenotimplementederror) immediately, before any network request. X's "tweets and replies" (`UserTweetsAndReplies`) GraphQL operation requires a fresh, single-use `x-client-transaction-id` per request (live-verified 2026-07-05) that this package's harvest-then-replay architecture doesn't reproduce — see that error's docstring and [FAQ-and-Troubleshooting.md](FAQ-and-Troubleshooting.md).
+- `replies` — when `True`, reads the profile's tweets **and replies** via `UserTweetsAndReplies` instead of `UserTweets`. This is one of the three operations behind the [transaction-id wall](Transaction-ID.md), so it is the least reliable parameter on this method: it can raise [`TransactionIdError`](#transactioniderror) or fall back to the browser (first page only) if X invalidates the generator.
 - `limit` — maximum number of (non-pinned) tweets to return. `None` means no count limit (bounded only by `max_requests`/feed exhaustion). A pinned tweet, if present, is always included and never counts against `limit`.
 - `since` / `until` — inclusive date bounds, either an ISO `"YYYY-MM-DD"` string or a `datetime.date`. A malformed string raises `ValueError` (strict `date.fromisoformat` parsing). `since` stops pagination once a tweet older than the bound is seen; check `x.last_result.since_target_crossed` to confirm the bound was actually reached rather than merely inferred from `limit_reached`/`max_requests`.
 - `by` — disambiguates an all-digit `identifier` that would otherwise default to a numeric user id. Pass `by="screen_name"` to force treating an all-digit string as a handle instead.
@@ -271,7 +274,7 @@ def iter_user_tweets(
 ) -> Iterator[Tweet]
 ```
 
-Same parameters as `fetch_user_tweets()` — this is the streaming form (`replies=True` raises `FeatureNotImplementedError` here too, for the same reason). Unlike the FB sibling's `iter_profile()`, **this one genuinely streams**: each page's tweets are yielded as soon as they're parsed, one cursor-paginated network round trip at a time, rather than fully materializing the whole run before yielding anything. Breaking out of your loop early *does* save the remaining requests, which matters for a deep `limit=1000`-style pull where each page costs its own round trip plus pacing delay.
+Same parameters as `fetch_user_tweets()` — this is the streaming form, including `replies=True` and its [transaction-id](Transaction-ID.md) caveat. Unlike the FB sibling's `iter_profile()`, **this one genuinely streams**: each page's tweets are yielded as soon as they're parsed, one cursor-paginated network round trip at a time, rather than fully materializing the whole run before yielding anything. Breaking out of your loop early *does* save the remaining requests, which matters for a deep `limit=1000`-style pull where each page costs its own round trip plus pacing delay.
 
 Two things to know:
 
@@ -294,9 +297,34 @@ with XScraper(profile="default") as x:
         # skips the requests that would have fetched later pages.
 ```
 
+## fetch_home()
+
+```python
+def fetch_home(
+    self,
+    *,
+    limit: int | None = None,
+    since: str | date | None = None,
+    until: str | date | None = None,
+    wait_on_limit: bool = False,
+    max_wait: float | None = None,
+    raw: bool = False,
+) -> list[Tweet]
+```
+
+Your own home timeline. **Takes no identifier** — the feed belongs to the session, which is why this is the one read with nothing to target. Needs no transaction id. Promoted entries are dropped before they reach you.
+
+`limit`, `since`, `until`, `wait_on_limit`, `max_wait`, `raw` all mean the same as on [`fetch_user_tweets()`](#fetch_user_tweets). Sets `self.last_result`.
+
+```python
+with XScraper(profile="default") as x:
+    for tweet in x.fetch_home(limit=20):
+        print(tweet.author.screen_name if tweet.author else "?", tweet.text[:60])
+```
+
 ## search()
 
-**Not yet implemented in v0.1.0.** Calling `search()` raises [`FeatureNotImplementedError`](#featurenotimplementederror) immediately, before any network request — X's `SearchTimeline` GraphQL operation requires a fresh, single-use `x-client-transaction-id` per request (live-verified 2026-07-05), which this package's harvest-then-replay architecture doesn't reproduce. The signature/behavior below is what's implemented once a browser-observe fallback lands for this op (roadmap) — see [FAQ-and-Troubleshooting.md](FAQ-and-Troubleshooting.md).
+One of the three methods behind the [transaction-id wall](Transaction-ID.md): it works, but on a reverse-engineered header X can invalidate at any time, with a browser fallback (first page only) behind it.
 
 ```python
 def search(
@@ -323,8 +351,10 @@ If nothing matches, `stop_reason` on `self.last_result` is `"no_matches"` (disti
 
 ```python
 with XScraper(profile="default") as x:
-    tweets = x.search('from:nasa "artemis"', product="Latest", limit=20)  # raises FeatureNotImplementedError today
+    tweets = x.search('from:nasa "artemis"', product="Latest", limit=20)
 ```
+
+`quoted_tweet_id:<id>` is how you get a tweet's quote-tweets — there is no separate method for that, because X's own /quotes tab is a search too.
 
 ## fetch_tweet()
 
@@ -354,6 +384,34 @@ with XScraper(profile="default") as x:
     focal = thread[0]
     print(focal.text, "-", len(thread) - 1, "more tweet(s) in thread")
 ```
+
+## The social graph
+
+```python
+def fetch_following(self, identifier: str, *, by=None, limit=None,
+                    wait_on_limit=False, max_wait=None) -> list[User]
+def fetch_followers(self, identifier: str, *, by=None, limit=None,
+                    wait_on_limit=False, max_wait=None) -> list[User]
+def fetch_retweeters(self, identifier: str, *, limit=None,
+                     wait_on_limit=False, max_wait=None) -> list[User]
+```
+
+**These return `list[User]`, not `list[Tweet]`** — the only methods that do. `fetch_following`/`fetch_followers` take a profile identifier (with the same `by=` disambiguation as `fetch_user_tweets()`); `fetch_retweeters` takes a tweet URL or id.
+
+They set **`self.last_user_result`**, not `self.last_result` — a [`UserResult`](#userresult), because a run returning accounts has no tweets to put in a `RetrieveResult`. There is no `since`/`until`: a follow list carries no dates to filter on.
+
+`fetch_followers` is gated by the [transaction-id wall](Transaction-ID.md) and, unlike `search`/`replies`, has **no browser fallback**. `fetch_following` and `fetch_retweeters` are ungated.
+
+```python
+with XScraper(profile="default") as x:
+    following = x.fetch_following("nasa", limit=100)
+    if x.last_user_result.stop_reason == "empty_pages":
+        print(f"Partial: X stopped giving accounts after {len(following)}.")
+```
+
+**Watch `stop_reason == "empty_pages"`.** X pads some follow lists with cursor-only pages forever; the run gives up after three consecutive account-less pages rather than burning its whole budget. It means *we stopped*, not *the list ended* — reporting such a result as somebody's complete follower list is simply wrong. See [CLI Reference](CLI-Reference.md#the-empty_pages-stop-reason).
+
+There is deliberately no `fetch_likers()`: X removed the likers list from its product entirely, so there is nothing to call.
 
 ## Tweet / User / Media
 
@@ -430,7 +488,10 @@ ScraperForXError (base)
 ├── NotEnteredError
 ├── SessionClosedError
 ├── EnvelopeParseError
-└── FeatureNotImplementedError
+├── TransactionIdError
+├── GatedOpRejectedError
+├── BrowserFallbackError
+└── FeatureNotImplementedError  (deprecated — never raised)
 ```
 
 #### `ScraperForXError`
@@ -482,9 +543,21 @@ A read was attempted on an `XScraper` instance whose `with` block has already ex
 
 The GraphQL response envelope couldn't be located at all (e.g. `data.user.result.timeline...` for `UserTweets`) — a structural parse failure, distinct from a page that parsed fine but had zero tweets. Almost always means X rotated a query-id or changed the response shape. **Fix:** run `scrape-x doctor --refresh` (or `XScraper(...).status()` followed by a fresh `login()`) to re-anchor query-ids, then retry.
 
+#### `TransactionIdError`
+
+A fresh `x-client-transaction-id` could not be generated: x.com no longer serves one of the three ingredients the algorithm needs. Affects `search()`, `fetch_user_tweets(replies=True)` and `fetch_followers()` only — everything else is untouched. **Fix:** upgrade the package; the repair ships as a release, not as a setting. See [Transaction-ID](Transaction-ID.md).
+
+#### `GatedOpRejectedError`
+
+An id *was* minted and X refused the request anyway — the generator still runs but no longer produces something X accepts. This is what triggers the browser fallback for `search()`/`replies`; you will normally only see it escape if the fallback is unavailable.
+
+#### `BrowserFallbackError`
+
+The browser fallback itself could not produce a response — the `[browser]` extra is missing, the operation has no fallback page defined, or the page loaded without ever firing the operation (usually a browser profile that is logged out even though the stored cookies are not).
+
 #### `FeatureNotImplementedError`
 
-Raised by `search()` and by `fetch_user_tweets(replies=True)`/`iter_user_tweets(replies=True)` — both `SearchTimeline` and `UserTweetsAndReplies` require a fresh, single-use `x-client-transaction-id` per request (live-verified 2026-07-05), which this package's harvest-then-replay architecture doesn't reproduce (unlike `UserTweets`/`TweetDetail`, both proven to work over plain `httpx`). See the [README's "Known limitation"](../README.md#known-limitation-search-and-fetch---replies-v010) section and [FAQ-and-Troubleshooting.md](FAQ-and-Troubleshooting.md) for the roadmap.
+**Deprecated; nothing raises this any more.** Through v0.2.0 it was raised by `search()` and `fetch_user_tweets(replies=True)`, which could not work at all before the transaction id was generated per request. It stays exported so existing `except FeatureNotImplementedError:` clauses keep importing, and will be removed in the next major version.
 
 ## RetrieveResult
 
@@ -497,6 +570,18 @@ class RetrieveResult:
     since_target_crossed: bool = False
 ```
 
-Set as `x.last_result` after `fetch_user_tweets()`, `search()`, or `fetch_tweet()` (not `iter_user_tweets()` — see above). `stop_reason` is one of: `"limit_reached"`, `"since_crossed"`, `"feed_exhausted"`, `"no_matches"` (search only), `"max_requests"`, `"rate_limited"`, `"soft_locked"`. `since_target_crossed` tells you whether a `since=` bound was actually confirmed reached, as opposed to the run stopping first for another reason (`limit_reached`/`max_requests`) while a `since` bound was still requested but unconfirmed.
+Set as `x.last_result` after `fetch_user_tweets()`, `search()`, or `fetch_tweet()` (not `iter_user_tweets()` — see above). `stop_reason` is one of: `"limit_reached"`, `"since_crossed"`, `"feed_exhausted"`, `"no_matches"` (search only), `"max_requests"`, `"rate_limited"`, `"soft_locked"`, or `"browser_observed"` (the [browser fallback](Transaction-ID.md#the-browser-fallback) served this run — **one page only**). The full table, with what each means for completeness, is in the [CLI Reference](CLI-Reference.md#stop-reasons). `since_target_crossed` tells you whether a `since=` bound was actually confirmed reached, as opposed to the run stopping first for another reason (`limit_reached`/`max_requests`) while a `since` bound was still requested but unconfirmed.
+
+## UserResult
+
+```python
+@dataclass
+class UserResult:
+    users: list[User]
+    stop_reason: str
+    requests_made: int
+```
+
+Set as `x.last_user_result` after `fetch_following()`/`fetch_followers()`/`fetch_retweeters()`. A separate type from `RetrieveResult` on purpose: these runs return accounts, and putting them in a field called `tweets` would make the type lie. `stop_reason` here is one of `"limit_reached"`, `"feed_exhausted"`, `"max_requests"`, `"rate_limited"`, or `"empty_pages"` — there is no `since_crossed`, since there are no dates to cross.
 
 See [Configuration](Configuration.md) for how `profile`/`profile_dir` resolution and pacing/request-budget tuning work in more depth.

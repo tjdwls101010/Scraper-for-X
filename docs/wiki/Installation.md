@@ -13,7 +13,7 @@ pip install scraper-for-x
 Pulls in `httpx` and `platformdirs` only. This is enough to:
 
 - import a session via cookie export (`scrape-x login --cookies ...`) or `XScraper.from_cookies()`/`from_cookie_file()`
-- run all read commands (`fetch`, `search`, `tweet`, `status`)
+- run all read commands (`fetch`, `feed`, `search`, `tweet`, `following`, `followers`, `retweeters`, `status`)
 - re-anchor query-ids browser-free (`scrape-x doctor --refresh`), since that goes over `x.com`'s `main.js` via plain `httpx`, not a browser
 
 **With browser — adds the login path:**
@@ -70,6 +70,36 @@ Exit code `0` means the session is logged in and healthy. Non-zero prints what f
 
 See [Quick Start](Quick-Start.md) for the full first-run flow (`login` → `doctor` → `fetch`).
 
+## Upgrading
+
+**Staying current matters more here than for most packages.** X rotates the GraphQL query-ids this tool depends on every 2–4 weeks, and the `x-client-transaction-id` header behind `search`/`fetch --replies`/`followers` is reverse-engineered and can be invalidated by any X client deploy. Both repairs ship as **releases**, so an old install does not degrade gently — it stops working, and the symptom looks like "X is broken" rather than "you are out of date."
+
+```bash
+pip install --upgrade scraper-for-x
+```
+
+To see whether you are behind before something fails:
+
+```bash
+scrape-x --version                                       # what you have
+curl -s https://pypi.org/simple/scraper-for-x/ \
+  | grep -oE 'scraper_for_x-[0-9]+\.[0-9]+\.[0-9]+' | sed 's/.*-//' | sort -V | tail -1
+```
+
+Read the installed version from `--version`, which every release has had — not from `scrape-x catalog`, which only exists from 0.3.0 onward and therefore fails on exactly the old installs you are checking for.
+
+Read the published version from the **simple index** shown above rather than `pypi.org/pypi/scraper-for-x/json`. Measured: minutes after a release the JSON endpoint still reported the previous version while the simple index was already correct, so a JSON-only check can call a brand-new release "already latest". The same propagation lag can leave an upgrade one release short — verify with `scrape-x --version` afterwards rather than assuming it landed, and re-run if it did not.
+
+### Installing as a standalone tool
+
+If you only want the CLI and not a library in one of your own environments, install it as an isolated tool instead of into a shared virtualenv:
+
+```bash
+uv tool install --upgrade scraper-for-x     # or: pipx install scraper-for-x
+```
+
+This matters specifically for the `[browser]` extra: `scrapling[fetchers]` pins exact Playwright/patchright versions, and dropping that into an environment shared with another Playwright-based tool can fail to resolve or quietly break the other one.
+
 ## Platform support
 
 | Platform | Status |
@@ -84,4 +114,4 @@ Requires Python 3.11, 3.12, or 3.13.
 
 ---
 
-Next: [Quick Start](Quick-Start.md) walks through first login and your first fetch. For the risks you're taking on before you go further, read [../DISCLAIMER.md](../DISCLAIMER.md).
+Next: [Quick Start](Quick-Start.md) walks through first login and your first fetch. For the risks you're taking on before you go further, read [../DISCLAIMER.md](../../DISCLAIMER.md).

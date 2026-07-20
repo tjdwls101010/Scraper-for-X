@@ -101,9 +101,14 @@ This README covers the essentials. For everything else, see the **[wiki](docs/wi
 - [Python API Reference](docs/wiki/Python-API-Reference.md)
 - [Configuration](docs/wiki/Configuration.md) — profiles, environment variables
 - [Output Schema](docs/wiki/Output-Schema.md) — every `Tweet`/`User`/`Media` field
+- [Transaction-ID](docs/wiki/Transaction-ID.md) — why `search`, `fetch --replies` and `followers` are the fragile three
 - [Security and Privacy](docs/wiki/Security-and-Privacy.md) — the full threat model behind [DISCLAIMER.md](DISCLAIMER.md)
 - [FAQ and Troubleshooting](docs/wiki/FAQ-and-Troubleshooting.md)
 - [Contributing](docs/wiki/Contributing.md)
+
+## Contributing
+
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests, and the one rule that is specific to this project (never commit a real capture). Security reports go through [SECURITY.md](SECURITY.md), privately, never a public issue. Participation is covered by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

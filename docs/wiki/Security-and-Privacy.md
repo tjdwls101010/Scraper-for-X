@@ -1,6 +1,6 @@
 # Security and Privacy
 
-> **Start with [DISCLAIMER.md](../DISCLAIMER.md).** That file is the authoritative, plain-language summary of the risks you take on by using this tool, and nothing here supersedes it. This page exists to go one level deeper — into the actual mechanics of what's stored, what's scrubbed, and what isn't — for anyone who wants to understand the threat model before pointing this tool at their real account.
+> **Start with [DISCLAIMER.md](../../DISCLAIMER.md).** That file is the authoritative, plain-language summary of the risks you take on by using this tool, and nothing here supersedes it. This page exists to go one level deeper — into the actual mechanics of what's stored, what's scrubbed, and what isn't — for anyone who wants to understand the threat model before pointing this tool at their real account.
 
 None of this is legal advice. If any of it matters to your situation, talk to a lawyer.
 
@@ -45,14 +45,14 @@ Everything the tool prints or writes as a *diagnostic* — not the tweets you as
 **What routes through redaction:**
 
 - `-v`/`--verbose` diagnostic output
-- error messages (login failures, `status`/`doctor` failures, `setup` failures, unexpected errors during `fetch`/`search`/`tweet`)
+- error messages (login failures, `status`/`doctor` failures, `setup` failures, unexpected errors during any read command)
 - `--raw` per-tweet debug output (the raw captured GraphQL `tweet_results.result` node attached to each tweet, including nested `retweeted_tweet`/`quoted_tweet` raw nodes), **by default** — `--raw` alone gives you the scrubbed version
 - cookie-import parse/validation errors (see above)
 - any other message printed to stdout/stderr by the CLI
 
 **What does NOT route through redaction — deliberately:**
 
-- **Your actual `--output` file.** The tweets you asked for are written out full and unredacted, on purpose — that's the tool's whole reason to exist. A scrubbed version would defeat the point. See [DISCLAIMER.md §5](../DISCLAIMER.md) and treat that file as sensitive from the moment it's written.
+- **Your actual `--output` file.** The tweets you asked for are written out full and unredacted, on purpose — that's the tool's whole reason to exist. A scrubbed version would defeat the point. See [DISCLAIMER.md §5](../../DISCLAIMER.md) and treat that file as sensitive from the moment it's written.
 - `--raw` output when combined with `--no-redact` — this disables the scrub path entirely for that debug field and prints an on-screen warning (`WARNING: --no-redact leaves --raw output unscrubbed...`) whenever you use it. Only use this locally, for debugging a parser problem, never in a shared terminal or screen recording.
 
 ### What it actually scrubs
@@ -71,7 +71,7 @@ This is pattern matching against a known, fixed set of keys and URL shapes — *
 
 ## Third-party data and "you may become a data controller"
 
-Every tweet you capture belongs to someone else — the author, and often repliers, quoted authors, or anyone mentioned. [DISCLAIMER.md §4](../DISCLAIMER.md) frames this correctly: collecting identifiable personal data about other people can make *you* a data controller under GDPR, with real, not hypothetical, obligations attached — a lawful basis for processing, honoring data-subject access/deletion requests, and limiting retention. The DISCLAIMER also covers where CCPA/CPRA differs (it generally exempts purely personal/household activity, so it typically doesn't attach to a solo scraper) and where jurisdiction-specific privacy-tort risk can still apply regardless. That full legal framing lives in the DISCLAIMER, not here — this page only restates the practical consequence:
+Every tweet you capture belongs to someone else — the author, and often repliers, quoted authors, or anyone mentioned. [DISCLAIMER.md §4](../../DISCLAIMER.md) frames this correctly: collecting identifiable personal data about other people can make *you* a data controller under GDPR, with real, not hypothetical, obligations attached — a lawful basis for processing, honoring data-subject access/deletion requests, and limiting retention. The DISCLAIMER also covers where CCPA/CPRA differs (it generally exempts purely personal/household activity, so it typically doesn't attach to a solo scraper) and where jurisdiction-specific privacy-tort risk can still apply regardless. That full legal framing lives in the DISCLAIMER, not here — this page only restates the practical consequence:
 
 - **Retention:** don't keep captured output longer than you actually need it for.
 - **Deletion:** delete output files once you're done with whatever you captured them for. There's no built-in expiry or cleanup — the tool writes a file to `--output` (or the default `platformdirs` output directory) and steps away; the deletion decision is yours, on an ongoing basis.
@@ -80,13 +80,13 @@ Every tweet you capture belongs to someone else — the author, and often replie
 
 ## Account-ban risk, and how to reduce it
 
-Automating an X account — even read-only, over a real logged-in session — violates X's Terms of Service ([DISCLAIMER.md §1](../DISCLAIMER.md)), and X is aggressive about flagging automation. Nothing here eliminates that risk; the tool's guardrails only reduce it:
+Automating an X account — even read-only, over a real logged-in session — violates X's Terms of Service ([DISCLAIMER.md §1](../../DISCLAIMER.md)), and X is aggressive about flagging automation. Nothing here eliminates that risk; the tool's guardrails only reduce it:
 
 - **Use a dedicated or throwaway account, never your primary one.** This is the single highest-leverage mitigation, and the DISCLAIMER leads with it for a reason.
 - **The non-bypassable pacing floor.** `config.py` enforces a minimum **0.5s** delay between GraphQL reads within a single run — `clamp_request_pause` silently raises anything at or below that floor back up to it, with a stderr note, no matter how the value arrives. This is a *per-process* floor, not a global rate ceiling: nothing stops N separate invocations from running concurrently, and there is no multi-account rotation, proxy-for-scale, or CAPTCHA-solving code to make that a practical mass-scraping path — the guardrail is what discourages bursting from a single invocation and protects your own account, not a hard cap on aggregate throughput. On top of that floor, the read loop adds a randomized human-like pause between reads by default, and a per-run request budget (`DEFAULT_MAX_REQUESTS = 500`) so one invocation can't walk an entire prolific account unattended.
 - **Keep volume low.** Shallow, recent fetches are safer than deep archival pulls. A deep `--since`/`--limit` run makes more requests via cursor pagination and raises both rate-limit and account-flag risk — the safe operating point (shallow, recent, low-frequency) and a deep-archival pull pull in opposite directions; that's a real tradeoff, not a bug to fix.
 - **Run from the same network/IP where the session was established.** Prefer running `scrape-x` from the same network/egress IP as wherever you ran `scrape-x login`, or wherever you originally exported cookies from. An abrupt IP or client change against an existing session — especially pairing a cookie-imported session with a datacenter/VPN IP — is exactly the kind of signal X's abuse systems weight, and it can soft-lock the session (X returns HTTP 200 with an empty/limited timeline instead of a clean 401) even without an outright ban. `scrape-x status`/`doctor` and the retrieval layer's pre-exit-4 viewer-lookup probe exist partly to detect this state and map it to exit code 2 (`scrape-x login`) rather than a misleading "empty result" or "parse drift" signal.
-- **Never run this in a loop or scheduler.** There is no built-in scheduler/daemon, and none will be added — see [DISCLAIMER.md §7](../DISCLAIMER.md).
+- **Never run this in a loop or scheduler.** There is no built-in scheduler/daemon, and none will be added — see [DISCLAIMER.md §7](../../DISCLAIMER.md).
 
 ## If you find a security issue
 

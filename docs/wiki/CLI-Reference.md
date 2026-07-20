@@ -1,6 +1,6 @@
 # CLI Reference
 
-The complete, flag-by-flag reference for `scrape-x`. The [README](../README.md) has a condensed version of this; this page is the authoritative one — every default and every exit code here is read directly out of `build_parser()`, `_finish()`, and `_handle_common_errors()` in `src/scraper_for_x/cli.py`, not copied from memory.
+The complete, flag-by-flag reference for `scrape-x`. The [README](../../README.md) has a condensed version of this; this page is the authoritative one — every default and every exit code here is read directly out of `build_parser()`, `_finish()`, and `_handle_common_errors()` in `src/scraper_for_x/cli.py`, not copied from memory.
 
 If you haven't run either of these yet, do them in this order first: [Installation](Installation.md), then `scrape-x setup`, then `scrape-x login`.
 
@@ -16,7 +16,9 @@ Every subcommand below also accepts `-h`/`--help`.
 
 ## `login`
 
-One-time interactive login. Opens a real, visible Chromium window (a stealth `scrapling` browser session) at `https://x.com/home` and prints `A browser window should now be open. Log in to X there, then press Enter here to continue...`, then waits. Once you press Enter, it makes a few best-effort navigations (X's own profile, its replies tab, a live search, and whatever tweet it finds a link to on that search page) purely to harvest GraphQL query-ids/features for all four read ops (`UserTweets`, `UserTweetsAndReplies`, `SearchTimeline`, `TweetDetail`) from what gets captured, then extracts `auth_token`/`ct0` from the browser's cookie jar and persists the session (cookies, user agent, harvested query-ids/features) to disk under the named profile.
+One-time interactive login. Opens a real, visible Chromium window (a stealth `scrapling` browser session) at `https://x.com/home` and prints `A browser window should now be open. Log in to X there, then press Enter here to continue...`, then waits. Once you press Enter, it makes a few best-effort navigations (X's own profile, its replies tab, a live search, and whatever tweet it finds a link to on that search page) purely to harvest GraphQL query-ids/features from what gets captured, then extracts `auth_token`/`ct0` from the browser's cookie jar and persists the session (cookies, user agent, harvested query-ids/features) to disk under the named profile.
+
+An operation not observed during that login simply falls back to the query-id shipped with the package, so a login that captures fewer ops than usual is not a failure. Most ids can also be refreshed later without a browser at all (`doctor --refresh`), with one exception: `Retweeters` lives in a lazily-loaded JavaScript chunk rather than X's main bundle, so it is reachable only by a browser login or the shipped default.
 
 Alternatively, `--cookies PATH` imports an already-exported cookie file instead of opening a browser at all — no `scrapling`/browser dependency needed for this path.
 
@@ -188,14 +190,14 @@ A bare all-digit token is treated as a numeric user **id** by default (X's `rest
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--replies` | off | **Not yet implemented** (`UserTweetsAndReplies` requires a per-request, single-use `x-client-transaction-id` X's read GraphQL otherwise never needs — live-verified 2026-07-05; see [FAQ](FAQ-and-Troubleshooting.md)). Currently exits 1 with a clear `FeatureNotImplementedError` message before any network request. |
+| `--replies` | off | Read the profile's tweets **and replies** (`UserTweetsAndReplies`) instead of tweets only. A genuinely different operation with a different request shape — and one of the three behind the [transaction-id wall](Transaction-ID.md), so it is the least reliable flag on this command. |
 | `--limit N` | none (unbounded) | Stop after this many (non-pinned) tweets. |
-| `--since YYYY-MM-DD` | none | Stop once a tweet older than this date is seen. Best-effort — see [`--since`/`--until` semantics](#--since---until-semantics-and-exit-code-7) below. |
+| `--since YYYY-MM-DD` | none | Stop once a tweet older than this date is seen. Best-effort — see [`--since`/`--until` semantics](#--since--until-semantics-and-exit-code-7) below. |
 | `--until YYYY-MM-DD` | none | Skip tweets newer than this date (does not itself stop the run). |
 | `--by screen_name\|id` | none (auto-detected) | Force how `<identifier>` is interpreted, overriding the all-digit-means-id default. |
 | `--format json\|ndjson` | `json` | Output format. `json` is a single array; `ndjson` is one JSON object per line. |
 | `--output PATH` | a generated path under this tool's data directory (see below) | Where to write the result. |
-| `--wait-on-limit` | off | On a 429, sleep until the rate-limit reset instead of stopping. See [below](#--wait-on-limit---max-wait). |
+| `--wait-on-limit` | off | On a 429, sleep until the rate-limit reset instead of stopping. See [below](#--wait-on-limit--max-wait). |
 | `--max-wait SECONDS` | none (wait the full reset interval) | Caps how long `--wait-on-limit` will sleep in one go. |
 | `--profile NAME` | `default` | Which login profile's session to use. |
 | `--profile-dir PATH` | none | Override where that profile is stored. |
@@ -211,7 +213,7 @@ If `--output` is omitted, the file is written under this package's own data dire
 # Last 30 tweets, defaults everywhere else.
 scrape-x fetch nasa --limit 30
 
-# Everything since a date, as NDJSON to a specific file (--replies not yet implemented, see below).
+# Everything since a date, as NDJSON to a specific file.
 scrape-x fetch @nasa --since 2026-04-01 --format ndjson --output ~/x-export.ndjson
 
 # A numeric-id profile.
@@ -239,11 +241,36 @@ scrape-x fetch nasa --limit 5 --raw -v
 12 tweets, range 2026-05-14..2026-07-04, stop reason: max_requests (requested --since NOT confirmed reached). Saved to /Users/you/.../nasa-....json
 ```
 
+## `feed`
+
+Your own home timeline (`HomeTimeline`).
+
+```
+scrape-x feed [flags]
+```
+
+**Takes no identifier** — the feed belongs to the logged-in session, which is what makes it the one read with nothing to target. Needs no transaction id. Promoted/advertisement entries are present in X's response and are dropped before anything is written.
+
+### Flags
+
+`--limit`, `--since`, `--until`, `--format`, `--output`, `--wait-on-limit`, `--max-wait`, `--profile`, `--profile-dir`, `--raw`, `--no-redact`, `-v` — all with the same meaning and defaults as [`fetch`](#fetch). There is no `--replies`/`--by`, since there is no target to interpret.
+
+```bash
+scrape-x feed --limit 20
+scrape-x feed --since 2026-07-01 --format ndjson --output ~/feed.ndjson
+```
+
+```
+20 tweets, range 2026-07-19..2026-07-20, stop reason: limit_reached. Saved to /Users/you/Library/Application Support/scraper-for-x/output/home-20260720T133040191608Z.json
+```
+
+The default filename uses `home` in place of an identifier.
+
 ## `search`
 
-**Not yet implemented in v0.1.0.** Live-verified 2026-07-05: X's `SearchTimeline` GraphQL operation requires a fresh, single-use `x-client-transaction-id` on every request — a captured value works exactly once and then 404s, so it cannot be harvested and replayed the way session cookies and query-ids are (unlike `UserTweets`/`TweetDetail`, both proven to work over plain `httpx` replay with no such header). Reproducing X's transaction-id generator is exactly the fragility this package's harvest-then-replay architecture was built to avoid. Running `scrape-x search` fails fast with a clear `FeatureNotImplementedError` message and exit code `1`, before any network request. See [FAQ-and-Troubleshooting.md](FAQ-and-Troubleshooting.md) for the roadmap (a browser-observe fallback for this op specifically).
+Tweets matching a query, including X's advanced search operators.
 
-Tweets matching a query, including X's advanced search operators (once implemented).
+**This is one of the three commands behind the [transaction-id wall](Transaction-ID.md)** — it works, but it depends on a reverse-engineered header that X can invalidate at any time. It falls back to the browser (first page only) when that happens, if the `[browser]` extra is installed.
 
 ```
 scrape-x search <query> [flags]
@@ -285,6 +312,63 @@ scrape-x search "from:nasa since:2026-01-01" --since 2026-01-01 --until 2026-03-
 ```
 
 A query that legitimately matches nothing is not an error — stop reason `no_matches`, exit `0`, an empty (or `[]`) output file.
+
+`quoted_tweet_id:<id>` is worth knowing specifically: it is how you get a tweet's quote-tweets, and it is exactly what X's own /quotes tab issues. There is no separate `quoters` command for that reason.
+
+## `following` / `followers` / `retweeters`
+
+The social graph. **These three emit `User` objects, not `Tweet`** — the only commands that do. See [Output Schema](Output-Schema.md#user-as-a-top-level-result).
+
+```
+scrape-x following <identifier> [flags]
+scrape-x followers <identifier> [flags]
+scrape-x retweeters <identifier> [flags]
+```
+
+- `following <identifier>` / `followers <identifier>` — accounts a user follows / accounts following them. `<identifier>` is a profile identifier, same forms and same `--by` disambiguation as [`fetch`](#fetch).
+- `retweeters <identifier>` — accounts that retweeted a tweet. `<identifier>` is a **tweet** URL or numeric tweet id, same forms as [`tweet`](#tweet); there is no `--by`.
+
+`followers` is behind the [transaction-id wall](Transaction-ID.md) and has **no browser fallback**; `following` and `retweeters` are not gated. That asymmetry is X's, not a design choice here.
+
+### Flags
+
+`--limit`, `--format`, `--output`, `--wait-on-limit`, `--max-wait`, `--profile`, `--profile-dir`, `--raw`, `--no-redact`, `-v` — same meaning as [`fetch`](#fetch), except `--limit` counts **accounts**. There is no `--since`/`--until`: a follow list carries no dates to filter on.
+
+### Example invocations
+
+```bash
+scrape-x following nasa --limit 100
+scrape-x followers nasa --limit 50 --format ndjson
+scrape-x retweeters https://x.com/nasa/status/1234567890123456789 --limit 20
+```
+
+```
+50 accounts, stop reason: limit_reached. Saved to /Users/you/.../followers-nasa-20260720T141730659793Z.json
+```
+
+The summary line counts **accounts**, not tweets, and carries no date range — there is nothing meaningful to report one for.
+
+### The `empty_pages` stop reason
+
+X pads some follow lists with pages that carry a fresh cursor and no accounts, indefinitely. Left alone, the ordinary "keep going until the cursor stops advancing" rule never terminates and burns the whole request budget collecting almost nothing — measured: `following` on `@X` returns one account, then empty pages until the budget runs out, about 250 seconds later.
+
+So these three commands stop after three consecutive account-less pages, with stop reason **`empty_pages`**. Read it as *we gave up*, not *we reached the end* — the distinction is the whole reason it isn't reported as `feed_exhausted`. A list that ends this way is incomplete and should be described that way.
+
+## `catalog`
+
+Prints a machine-readable JSON description of the whole CLI — every command, every flag with its type and default, the exit-code contract, and which object type each command emits.
+
+```bash
+scrape-x catalog
+```
+
+Offline, no session, no network, always exit `0`. `--json` is accepted for symmetry with `schema --json` but does nothing: this command has no non-JSON form.
+
+It is **generated from the argument parser itself**, so it describes the version you actually have installed rather than the version whoever wrote the docs had. That makes it the right thing for a script or an agent to read — this page can go stale between releases; the catalog cannot. Pair it with [`schema`](#schema) (what comes back) — catalog is how to call it.
+
+## `schema`
+
+Prints the output object schema — `Tweet`, its nested `User` and `Media` — as an annotated listing, or as JSON Schema (draft 2020-12) with `--json`. Offline, no session, always exit `0`. See [Output Schema](Output-Schema.md) for the same material in prose.
 
 ## `tweet`
 
@@ -330,7 +414,7 @@ If the tweet doesn't exist (deleted, or the thread is otherwise unavailable), an
 
 ## `--wait-on-limit`/`--max-wait`
 
-Every fetch-shaped command (`fetch`, `search`, `tweet`) hits X's per-endpoint 15-minute rate limits eventually on a long pull. What happens next depends on `--wait-on-limit`:
+Every read command (`fetch`, `feed`, `search`, `tweet`, `following`, `followers`, `retweeters`) hits X's per-endpoint 15-minute rate limits eventually on a long pull. Those limits are **per operation** and differ by more than an order of magnitude, so "a deep pull" costs very different amounts depending on which command it is — see the table in [FAQ and Troubleshooting](FAQ-and-Troubleshooting.md#im-hitting-rate-limits-constantly). What happens next depends on `--wait-on-limit`:
 
 - **Without `--wait-on-limit` (default):** a 429 immediately stops the run with stop reason `rate_limited`, and whatever was collected so far is still written to the output file. Exit code `3`.
 - **With `--wait-on-limit`:** if the 429 response carried an `x-rate-limit-reset` header (a unix timestamp), the run instead prints `scrape-x: waiting <N>s until rate-limit reset` to stderr, sleeps until that reset time, then retries the same request and continues pagination — the run does not stop or lose progress. If the 429 carried no reset timestamp at all, `--wait-on-limit` has nothing to wait for and the run stops the same as if the flag were absent (stop reason `rate_limited`, exit `3`).
@@ -350,7 +434,7 @@ By default, `--raw` output is **redacted before it's written to the output file*
 WARNING: --no-redact leaves --raw output unscrubbed. The saved file will contain an unredacted live session fragment and full tweet text. See DISCLAIMER.md.
 ```
 
-Note this is the reverse of every other redaction path in the tool: normal `-v`/error/diagnostic output is *always* scrubbed with no way to turn it off, but `--raw`'s node is written to the *output file* — which is unredacted by design everywhere else — so `--no-redact` exists to let `--raw` opt into that same "fully raw" behavior on purpose, deliberately, with a warning attached. Only use it locally when you specifically need the untouched node; the resulting file is exactly as sensitive as [DISCLAIMER.md](../DISCLAIMER.md) describes.
+Note this is the reverse of every other redaction path in the tool: normal `-v`/error/diagnostic output is *always* scrubbed with no way to turn it off, but `--raw`'s node is written to the *output file* — which is unredacted by design everywhere else — so `--no-redact` exists to let `--raw` opt into that same "fully raw" behavior on purpose, deliberately, with a warning attached. Only use it locally when you specifically need the untouched node; the resulting file is exactly as sensitive as [DISCLAIMER.md](../../DISCLAIMER.md) describes.
 
 ## `--since`/`--until` semantics, and exit code 7
 
@@ -362,7 +446,7 @@ Both bounds compare against a tweet's `created_at`; a tweet with `created_at=Non
 
 `--limit` and `--since` compose: whichever condition is hit first, on a given page, wins. The pagination loop checks `--limit` before `--since` on every batch, which is exactly why exit code `7` is scoped the way it is below.
 
-Internally, `retrieve.py` tracks one stop reason per run: `limit_reached`, `since_crossed`, `feed_exhausted`, `no_matches` (search only, empty result with nothing ever yielded), `max_requests` (the request budget — 500 by default — ran out), `rate_limited`, or `soft_locked`. Whether `--since` was actually **confirmed reached** is judged only from `since_target_crossed` (set when stop reason is `since_crossed`) — deliberately not inferred from `limit_reached`, because hitting `--limit` first proves nothing about whether `--since` would also have been reached had the run kept going.
+Internally, `retrieve.py` tracks one stop reason per run — the full vocabulary is in [Stop reasons](#stop-reasons) below. Whether `--since` was actually **confirmed reached** is judged only from `since_target_crossed` (set when stop reason is `since_crossed`) — deliberately not inferred from `limit_reached`, because hitting `--limit` first proves nothing about whether `--since` would also have been reached had the run kept going.
 
 The CLI then makes its own judgment call on top of that: hitting `--limit` is still reported as a full, ordinary success (exit `0`), even when `--since` was never independently confirmed — you got exactly what you asked for, on purpose. Exit code `7` is reserved for the narrower, genuinely uncertain case: `--since` was requested, the run did **not** confirm crossing it, and the run's own stop reason was `limit_reached` or `max_requests` (i.e. something other than actually crossing the date or the feed running dry). In that case the tool honestly doesn't know whether your requested date was reached, so it says so instead of guessing.
 
@@ -383,6 +467,24 @@ since_inconclusive = (
 - `--since 2020-01-01`, but the run is `rate_limited` or `soft_locked` before reaching it → those stop reasons take priority over the `since`-inconclusive check entirely (see the exit-code table below): exit `3` or `2` respectively, not `7`.
 
 If you're scripting against this, exit `7` is your signal to either raise the request budget, narrow `--since`, retry with `--wait-on-limit`, or accept the partial result — the stderr line always states the actual tweet count and observed date range either way, so a partial run is never silently indistinguishable from a complete one.
+
+## Stop reasons
+
+Every read command's stderr summary ends with a stop reason. It answers a question the tweet count alone cannot: **is this all of it?** Treat it as part of the result, not as decoration — several of these mean "partial" while looking like success (exit `0`).
+
+| Stop reason | What actually happened | Is the result complete? |
+|---|---|---|
+| `limit_reached` | Your `--limit` was hit. | No — there is more behind it. |
+| `since_crossed` | A tweet older than `--since` was seen, so the run stopped there. | Yes, for the window you asked for. |
+| `feed_exhausted` | X ran out of things to give. | Yes. |
+| `no_matches` | A search matched nothing at all. | Yes — genuinely empty, not an error. |
+| `max_requests` | The per-run request budget (500 by default) ran out. | No. |
+| `rate_limited` | A 429 stopped the run; whatever was collected is still written. | No. Exit `3`. |
+| `soft_locked` | Nothing came back **and** a probe found the session no longer valid. | No — this is a session problem. Exit `2`. |
+| `browser_observed` | The transaction id was refused and the [browser fallback](Transaction-ID.md#the-browser-fallback) served the request. | **No — one page only.** |
+| `empty_pages` | A social-graph run gave up after three consecutive account-less pages. | **No — we stopped, X didn't.** |
+
+The last two are the ones most likely to be misread, because both produce a normal-looking result and exit `0`. Neither means the list is finished.
 
 ## Exit codes
 
@@ -417,7 +519,13 @@ If you're scripting against this, exit `7` is your signal to either raise the re
 | 0 | Authenticated round-trip (and, with `--refresh`, the re-anchor) succeeded. |
 | 1 | No session exists, the session check failed, or the round-trip otherwise didn't succeed. |
 
-### `fetch` / `search` / `tweet`
+### `catalog` / `schema`
+
+| Code | Meaning |
+|---|---|
+| 0 | Always. Both are offline and take no session. |
+
+### Read commands (`fetch`, `feed`, `search`, `tweet`, `following`, `followers`, `retweeters`)
 
 | Code | Meaning | Where it comes from |
 |---|---|---|
@@ -425,9 +533,9 @@ If you're scripting against this, exit `7` is your signal to either raise the re
 | 1 | Invalid identifier, or any other/unexpected error. | `InvalidIdentifierError` on the positional argument (including `tweet` being given a non-tweet identifier). Also the catch-all fallback when the raised exception isn't one of the typed errors below. Also: **any argparse usage error** (bad/missing flag, unknown subcommand) — see note below. |
 | 2 | Login required, session expired, or soft-locked. | `LoginRequiredError` (no session for this profile) / `SessionExpiredError` (explicit 401/logged-out marker, or a soft-locked session detected by the pre-exit-4 probe — see below) from `retrieve.*`. Message includes `Run: scrape-x login --profile <name>`. |
 | 3 | Rate-limited before completion. | `RateLimitedError` — a 429 with `--wait-on-limit` not set (or set but the response carried no reset timestamp to wait on). Partial result is still written. |
-| 4 | Response envelope could not be parsed — possible query-id drift. | `EnvelopeParseError` from `parse.walk_instructions` — the `instructions`/`entries`/`cursor` anchors themselves are not locatable. This is **never** raised for a merely-empty (but structurally valid) result; see the soft-lock probe below. Message suggests `scrape-x doctor --refresh`. |
-| 5 | Target (profile or tweet) unavailable. | `ProfileUnavailableError` (`fetch`: suspended/protected/nonexistent account) or `NotFoundError` (`tweet`: deleted tweet or unavailable thread). |
-| 7 | Partial: `--since` requested but not confirmed reached. | `args.since is not None`, `since_target_crossed` is `False`, and stop reason is `limit_reached` or `max_requests`. See [above](#--since---until-semantics-and-exit-code-7). |
+| 4 | What X served no longer matches what this package expects. | Two distinct causes, distinguished by the message. **Query-id drift** — `EnvelopeParseError` from the parser: the `instructions`/`entries`/`cursor` anchors are not locatable. Fix locally with `scrape-x doctor --refresh`. **Transaction-id failure** — `TransactionIdError` (the generator could not run) or a gated op refusing a minted header, affecting only `search`/`fetch --replies`/`followers`; see [Transaction-ID](Transaction-ID.md#when-it-breaks-two-different-failures). Neither is ever raised for a merely-empty but structurally valid result; see the soft-lock probe below. |
+| 5 | Target (profile or tweet) unavailable. | `ProfileUnavailableError` (`fetch`/`following`/`followers`: suspended/protected/nonexistent account) or `NotFoundError` (`tweet`: deleted tweet or unavailable thread). |
+| 7 | Partial: `--since` requested but not confirmed reached. | `args.since is not None`, `since_target_crossed` is `False`, and stop reason is `limit_reached` or `max_requests`. See [above](#--since--until-semantics-and-exit-code-7). |
 
 **A genuinely empty (but structurally parsed) result is not automatically exit 4.** When a run yields nothing at all, `retrieve.py` runs a pre-exit-4 soft-lock probe (the same cheap `UserByScreenName` check `status`/`doctor` use) before accepting that the emptiness is real: for `search`, an empty result is `no_matches` (exit `0`); for everything else, if the probe says the session is no longer logged in, the stop reason becomes `soft_locked` and the CLI raises `SessionExpiredError` (exit `2`) instead of silently reporting an empty success. Only a genuine structural parse failure (the envelope itself can't be walked) reaches exit `4`.
 
@@ -436,8 +544,9 @@ If you're scripting against this, exit `7` is your signal to either raise the re
 ## See also
 
 - [Quick Start](Quick-Start.md) — a walkthrough of `setup` → `login` → `fetch` for a first-time user.
+- [Transaction-ID](Transaction-ID.md) — why `search`, `fetch --replies` and `followers` are the fragile three.
 - [Configuration](Configuration.md) — profile storage resolution order, environment variables, browser cache location.
 - [Output Schema](Output-Schema.md) — what actually ends up in the `--output` file.
 - [Security & Privacy](Security-and-Privacy.md) — the full redaction/threat model referenced throughout this page.
 - [FAQ & Troubleshooting](FAQ-and-Troubleshooting.md)
-- [../DISCLAIMER.md](../DISCLAIMER.md)
+- [../DISCLAIMER.md](../../DISCLAIMER.md)

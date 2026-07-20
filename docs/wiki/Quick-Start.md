@@ -1,10 +1,10 @@
 # Quick Start
 
-This page walks through the whole flow once, slowly, with real terminal output at each step. If you just want the condensed version, see the [main README](../README.md#quick-start). If you haven't installed the tool yet, start with [Installation](Installation.md) instead — this page assumes `scrape-x` is already on your PATH.
+This page walks through the whole flow once, slowly, with real terminal output at each step. If you just want the condensed version, see the [main README](../../README.md#quick-start). If you haven't installed the tool yet, start with [Installation](Installation.md) instead — this page assumes `scrape-x` is already on your PATH.
 
-Before any of this: **read [DISCLAIMER.md](../DISCLAIMER.md).** This automates a read-only session against X/Twitter's Terms of Service, and it's worth knowing what that means before you log anything in.
+Before any of this: **read [DISCLAIMER.md](../../DISCLAIMER.md).** This automates a read-only session against X/Twitter's Terms of Service, and it's worth knowing what that means before you log anything in.
 
-Four steps: `login` → `status` → `fetch`/`search`/`tweet` → look at the output.
+Four steps: `login` → `status` → a read command → look at the output.
 
 ## 1. Log in
 
@@ -43,9 +43,9 @@ scrape-x: export.txt still contains a live, password-less X session — delete o
 Cookie import succeeded. Profile saved: 'default'
 ```
 
-Either way, what got saved is `auth_token` + `ct0` + a user-agent string, as a single `session.json` file under a profile directory (`chmod 0700`, the file itself `0600`). There's no password stored, but anyone who can read that file can act as your logged-in X session just as well as you can — see [DISCLAIMER.md §8](../DISCLAIMER.md) before you treat it casually. Don't back it up to iCloud/Dropbox/Time Machine, don't commit it, and if the machine is ever lost or compromised, revoke the session from x.com itself (Settings → Security and account access → Apps and sessions), not just by deleting the folder.
+Either way, what got saved is `auth_token` + `ct0` + a user-agent string, as a single `session.json` file under a profile directory (`chmod 0700`, the file itself `0600`). There's no password stored, but anyone who can read that file can act as your logged-in X session just as well as you can — see [DISCLAIMER.md §8](../../DISCLAIMER.md) before you treat it casually. Don't back it up to iCloud/Dropbox/Time Machine, don't commit it, and if the machine is ever lost or compromised, revoke the session from x.com itself (Settings → Security and account access → Apps and sessions), not just by deleting the folder.
 
-**Use a dedicated or throwaway X account for this, not your main one.** Automating any X account — including "automating" by just reading what a real logged-in session sees — is against X's Terms of Service, and enforcement shows up as rate-limits, soft-locks, or account suspension. Read [../DISCLAIMER.md](../DISCLAIMER.md) in full; this isn't boilerplate legal filler, it covers real account and data risk.
+**Use a dedicated or throwaway X account for this, not your main one.** Automating any X account — including "automating" by just reading what a real logged-in session sees — is against X's Terms of Service, and enforcement shows up as rate-limits, soft-locks, or account suspension. Read [../DISCLAIMER.md](../../DISCLAIMER.md) in full; this isn't boilerplate legal filler, it covers real account and data risk.
 
 ## 2. Check your session: `status`
 
@@ -81,15 +81,45 @@ $ scrape-x fetch nasa --limit 50 --format json
 50 tweets, range 2026-05-02..2026-07-04, stop reason: limit_reached. Saved to /Users/you/Library/Application Support/scraper-for-x/output/nasa-20260705T031813123456Z.json
 ```
 
-`nasa` here can be a bare username, `@nasa`, a numeric user id (pass `--by id` if a bare numeric string should be read as a screen name instead — otherwise an all-digit token is assumed to be an id), or a full profile URL like `https://x.com/nasa`. `--since 2026-06-01`/`--until 2026-06-30` bound the date range, `--wait-on-limit` (optionally with `--max-wait SECONDS`) sleeps out a rate-limit instead of stopping, and `--format ndjson` gives one JSON object per line instead of a single array. `--replies` exists as a documented flag but is **not yet implemented** (exits 1 immediately with a clear message) — see [FAQ-and-Troubleshooting.md](FAQ-and-Troubleshooting.md).
+`nasa` here can be a bare username, `@nasa`, a numeric user id (pass `--by id` if a bare numeric string should be read as a screen name instead — otherwise an all-digit token is assumed to be an id), or a full profile URL like `https://x.com/nasa`. `--since 2026-06-01`/`--until 2026-06-30` bound the date range, `--wait-on-limit` (optionally with `--max-wait SECONDS`) sleeps out a rate-limit instead of stopping, and `--format ndjson` gives one JSON object per line instead of a single array. `--replies` reads the profile's tweets *and* replies — a different X operation, and one of three that depend on a [generated transaction id](Transaction-ID.md), so it is the least reliable flag here.
 
-Notice where the file landed: **not** your current directory, and not stdout. By default, output goes under this tool's own per-user data directory (via [`platformdirs`](https://pypi.org/project/platformdirs/) — on macOS, `~/Library/Application Support/scraper-for-x/output/`), named `<identifier>-<UTC timestamp>.json`. That's deliberate: captured tweets contain other people's names, text, and media URLs (real third-party personal data — see [../DISCLAIMER.md §4–5](../DISCLAIMER.md)), and a default that lands quietly in your current directory is a default that eventually gets `git add`ed by accident. Pass `--output some/path.json` if you want it somewhere specific.
+Notice where the file landed: **not** your current directory, and not stdout. By default, output goes under this tool's own per-user data directory (via [`platformdirs`](https://pypi.org/project/platformdirs/) — on macOS, `~/Library/Application Support/scraper-for-x/output/`), named `<identifier>-<UTC timestamp>.json`. That's deliberate: captured tweets contain other people's names, text, and media URLs (real third-party personal data — see [../DISCLAIMER.md §4–5](../../DISCLAIMER.md)), and a default that lands quietly in your current directory is a default that eventually gets `git add`ed by accident. Pass `--output some/path.json` if you want it somewhere specific.
 
-The one-line summary on stderr always tells you three things, so a partial run is never mistaken for a complete one: **how many tweets** were retrieved, the **date range** actually observed (oldest..newest), and the **stop reason** — why the fetch stopped (`limit_reached` here, because `--limit 50` was hit; other reasons include `feed_exhausted`, `since_crossed`, `no_matches`, `rate_limited`, and `soft_locked` — see [CLI Reference](CLI-Reference.md#exit-codes) for the full list).
+The one-line summary on stderr always tells you three things, so a partial run is never mistaken for a complete one: **how many tweets** were retrieved, the **date range** actually observed (oldest..newest), and the **stop reason** — why the fetch stopped (`limit_reached` here, because `--limit 50` was hit). **Read it — several stop reasons mean "partial" while still exiting 0**, notably `empty_pages` and `browser_observed`. The full table is in the [CLI Reference](CLI-Reference.md#stop-reasons).
+
+### Your own feed
+
+The shortest command in the tool, because it takes no target at all — the feed belongs to your session:
+
+```bash
+$ scrape-x feed --limit 20
+```
+
+```
+20 tweets, range 2026-07-19..2026-07-20, stop reason: limit_reached. Saved to /Users/you/Library/Application Support/scraper-for-x/output/home-20260720T133040191608Z.json
+```
 
 ### Search
 
-**Not yet implemented in v0.1.0.** `scrape-x search <query>` exits immediately with a clear `FeatureNotImplementedError` message and exit code `1` — X's `SearchTimeline` requires a fresh, single-use `x-client-transaction-id` per request (live-verified 2026-07-05), which this package's harvest-then-replay architecture doesn't reproduce. See [FAQ-and-Troubleshooting.md](FAQ-and-Troubleshooting.md) for why, and the roadmap for a planned fix.
+```bash
+$ scrape-x search "artemis" --limit 20 --product latest
+```
+
+Anything X's own search box accepts works here — `from:`, `since:`, `-filter:replies`, quoted phrases. `--product top` switches from chronological to X's ranking.
+
+Search is one of three commands that depend on a [generated transaction id](Transaction-ID.md); if it ever exits 4, that page explains what happened and what still works.
+
+### The social graph
+
+```bash
+$ scrape-x following nasa --limit 100
+```
+
+```
+100 accounts, stop reason: limit_reached. Saved to /Users/you/.../following-nasa-20260720T141713348460Z.json
+```
+
+`following`, `followers` and `retweeters` write **`User`** objects rather than tweets — see [Output Schema](Output-Schema.md#user-as-a-top-level-result).
 
 ### One tweet plus its thread
 
@@ -165,15 +195,16 @@ for tweet in tweets:
     print(tweet.id, tweet.text[:80])
 ```
 
-`XScraper` requires an active session (`x.login()`, or `XScraper.from_cookie_file(path)` — see step 1) and must be used inside a `with` block; reads outside of one raise `NotEnteredError`. `fetch_tweet()` mirrors the CLI's `tweet` subcommand, and `iter_user_tweets()` is a streaming generator form of `fetch_user_tweets()` for consuming tweets incrementally instead of waiting for the whole list. `search()` and `fetch_user_tweets(replies=True)`/`iter_user_tweets(replies=True)` raise `FeatureNotImplementedError` — not yet implemented, see [FAQ-and-Troubleshooting.md](FAQ-and-Troubleshooting.md).
+`XScraper` requires an active session (`x.login()`, or `XScraper.from_cookie_file(path)` — see step 1) and must be used inside a `with` block; reads outside of one raise `NotEnteredError`. `fetch_tweet()` mirrors the CLI's `tweet` subcommand, and `iter_user_tweets()` is a streaming generator form of `fetch_user_tweets()` for consuming tweets incrementally instead of waiting for the whole list. `fetch_home()` mirrors `feed`, `search()` mirrors `search`, and `fetch_following()`/`fetch_followers()`/`fetch_retweeters()` return `User` objects instead of tweets — see the [Python API Reference](Python-API-Reference.md).
 
 ## Exit codes
 
-`scrape-x` returns a specific exit code for each outcome, so scripts can branch without parsing stderr text: `0` success, `2` login needed/expired (run `scrape-x login`), `3` rate-limited, `4` response parsing failed — likely query-id drift, run `scrape-x doctor --refresh`, `5` target unavailable (suspended/protected/doesn't exist), `7` finished without confirming `--since` was actually reached. See [CLI Reference](CLI-Reference.md#exit-codes) for the full table.
+`scrape-x` returns a specific exit code for each outcome, so scripts can branch without parsing stderr text: `0` success, `2` login needed/expired (run `scrape-x login`), `3` rate-limited, `4` what X served no longer matches what this package expects (query-id drift — run `scrape-x doctor --refresh` — or a [transaction-id failure](Transaction-ID.md)), `5` target unavailable (suspended/protected/doesn't exist), `7` finished without confirming `--since` was actually reached. See [CLI Reference](CLI-Reference.md#exit-codes) for the full table.
 
 ## What's next
 
 - **[CLI Reference](CLI-Reference.md)** — every flag on every subcommand, the full exit-code table, and what each stop reason implies.
 - **[Python API Reference](Python-API-Reference.md)** — the full `XScraper` surface, including `iter_user_tweets` and `from_cookies`/`from_cookie_file`.
 - **[Configuration](Configuration.md)** — multiple login profiles, environment variables, and request pacing (`min_request_pause`, `max_requests`) without tripping the non-bypassable floor.
+- **[Transaction-ID](Transaction-ID.md)** — worth reading before you depend on `search`, `fetch --replies` or `followers` in anything automated.
 - If something looks wrong or a fetch returns 0 tweets, check [FAQ & Troubleshooting](FAQ-and-Troubleshooting.md) before filing an issue.

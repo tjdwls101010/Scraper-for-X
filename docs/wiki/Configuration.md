@@ -21,7 +21,7 @@ Profiles are stored under a platformdirs-managed data directory, one subdirector
 ~/Library/Application Support/scraper-for-x/profiles/<name>/session.json
 ```
 
-The session credential itself is a single JSON file (`session.json`) inside the profile directory, holding `auth_token`, `ct0`, the user-agent, and whatever query-ids/features were harvested at login time. The profile *directory* is created at `0700` (owner read/write/execute only), and the `session.json` file inside it is additionally hardened to `0600`. That file **is** an authenticated X session with no password attached — anyone who can read it can act as your account. Read [DISCLAIMER.md](../DISCLAIMER.md) before you back it up, sync it, or copy it anywhere.
+The session credential itself is a single JSON file (`session.json`) inside the profile directory, holding `auth_token`, `ct0`, the user-agent, and whatever query-ids/features were harvested at login time. The profile *directory* is created at `0700` (owner read/write/execute only), and the `session.json` file inside it is additionally hardened to `0600`. That file **is** an authenticated X session with no password attached — anyone who can read it can act as your account. Read [DISCLAIMER.md](../../DISCLAIMER.md) before you back it up, sync it, or copy it anywhere.
 
 If you log in with a real browser (`scrape-x login`, no `--cookies`), the stealth browser's own persistent context is stored alongside the credential, at `<profile-dir>/browser/` — nested under the same `0700` tree rather than a separate location.
 
@@ -29,7 +29,7 @@ If you log in with a real browser (`scrape-x login`, no `--cookies`), the stealt
 
 If you don't want profiles under the default platformdirs path, override the root directory profiles are stored under, two ways:
 
-- `--profile-dir PATH` on the command line (`login`, `status`, `doctor`, `fetch`, `search`, and `tweet` all accept it)
+- `--profile-dir PATH` on the command line (`login`, `status`, `doctor`, and every read command accept it)
 - the `SFX_PROFILE_DIR` environment variable
 
 The precedence, exactly (from `config.profile_dir`):
@@ -73,7 +73,7 @@ There's no flag or environment variable for this path — it's not user-configur
 
 ## The non-bypassable pacing floor: `MIN_REQUEST_PAUSE_SECONDS`
 
-Every read (`fetch`, `search`, `tweet`) goes over `httpx` as a paced sequence of GraphQL requests, not a browser doing anything visibly human — there's no scrolling to slow down here, just request pacing. `ReadClient` sleeps `min_pause` seconds before every request after the first.
+Every read (`fetch`, `feed`, `search`, `tweet`, `following`, `followers`, `retweeters`) goes over `httpx` as a paced sequence of GraphQL requests, not a browser doing anything visibly human — there's no scrolling to slow down here, just request pacing. `ReadClient` sleeps `min_pause` seconds before every request after the first.
 
 **One floor is non-bypassable: the inter-request pause cannot go below `0.5` seconds no matter what you pass.** `config.clamp_request_pause` enforces this in code, not just as documented advice:
 
@@ -103,11 +103,11 @@ with XScraper("default", min_request_pause=1.5, max_requests=200) as x:
 
 `DEFAULT_HUMAN_PAUSE = (1.0, 3.0)` is defined in `config.py`, but only its first element (`1.0`) is actually used as the default pause — there's no randomized min/max range the way the FB sibling randomizes scroll pauses; X reads are a fixed pause per request, not a scroll loop.
 
-Separately, `fetch`/`search`/`tweet`'s own pagination loop (in `retrieve.py`) tracks its own per-call request budget, defaulting to the same `500` figure — this is what actually produces the `max_requests` stop-reason you'll see in a run's summary line and exit code. In practice both budgets apply together: whichever is smaller stops the run first.
+Separately, each read command's own pagination loop (in `retrieve.py`) tracks its own per-call request budget, defaulting to the same `500` figure — this is what actually produces the `max_requests` stop-reason you'll see in a run's summary line and exit code. In practice both budgets apply together: whichever is smaller stops the run first.
 
 **When it's reasonable to raise `min_request_pause`:** if you're already seeing `RateLimitedError`/exit code 3 often, or you want a given profile to look less like an automated client hammering the read API at a steady 1-second cadence.
 
-**When you should not lower it below the default:** essentially never — `min_request_pause` is already clamped at `0.5`s regardless, so there's no way to make requests fire faster than that; if you're tempted to try, that's a sign you're scaling this beyond what a single logged-in session should be doing, which is exactly the account-safety line this floor exists to hold. See [DISCLAIMER.md](../DISCLAIMER.md).
+**When you should not lower it below the default:** essentially never — `min_request_pause` is already clamped at `0.5`s regardless, so there's no way to make requests fire faster than that; if you're tempted to try, that's a sign you're scaling this beyond what a single logged-in session should be doing, which is exactly the account-safety line this floor exists to hold. See [DISCLAIMER.md](../../DISCLAIMER.md).
 
 ## Handling rate limits: `--wait-on-limit` and `--max-wait`
 
@@ -121,13 +121,13 @@ scrape-x fetch nasa --limit 200 --wait-on-limit --max-wait 300
 
 ## Default output location and `--output`
 
-`fetch`/`search`/`tweet` write captured tweets to a file — never to stdout, and never to your current directory by default. The default path comes from `config.default_output_dir()`:
+Read commands write their results to a file — never to stdout, and never to your current directory by default. The default path comes from `config.default_output_dir()`:
 
 ```
 ~/Library/Application Support/scraper-for-x/output/<identifier>-<timestamp>.<ext>
 ```
 
-(`<identifier>` is the sanitized handle/id/query you passed in; `<ext>` is `json` or `ndjson` depending on `--format`.) This default is deliberate: captured tweets carry other people's handles, names, and tweet text (see [DISCLAIMER.md](../DISCLAIMER.md)), and a default that lands outside any git-tracked path makes it harder to accidentally commit someone else's data.
+(`<identifier>` is the sanitized handle/id/query you passed in; `<ext>` is `json` or `ndjson` depending on `--format`.) This default is deliberate: captured tweets carry other people's handles, names, and tweet text (see [DISCLAIMER.md](../../DISCLAIMER.md)), and a default that lands outside any git-tracked path makes it harder to accidentally commit someone else's data.
 
 Pass `--output PATH` to write somewhere else instead:
 

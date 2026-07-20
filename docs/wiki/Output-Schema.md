@@ -1,6 +1,8 @@
 # Output Schema
 
-Every tweet `scrape-x fetch`/`search`/`tweet` writes — whether to the default JSON file, `--format ndjson`, or a `Tweet` object from the [Python API](Python-API-Reference.md) — follows the same shape: one `Tweet` per top-level result, with a nested `User` for the author, a list of `Media`, and (optionally) one level of nested `Tweet` for a retweet or quote.
+Every tweet `scrape-x fetch`/`feed`/`search`/`tweet` writes — whether to the default JSON file, `--format ndjson`, or a `Tweet` object from the [Python API](Python-API-Reference.md) — follows the same shape: one `Tweet` per top-level result, with a nested `User` for the author, a list of `Media`, and (optionally) one level of nested `Tweet` for a retweet or quote.
+
+**Three commands write something else entirely.** `following`, `followers` and `retweeters` produce an array of `User` objects at the top level, with no `Tweet` anywhere in the file — see [User as a top-level result](#user-as-a-top-level-result).
 
 This page is a field-by-field reference generated from `src/scraper_for_x/model.py`. If a field here ever disagrees with what you actually get out of the tool, that's a bug.
 
@@ -68,7 +70,7 @@ This page is a field-by-field reference generated from `src/scraper_for_x/model.
 | Field | Type | Null? | Meaning |
 |---|---|---|---|
 | `kind` | `string` | never | One of `"photo"`, `"video"`, `"animated_gif"`, or `"unknown"`. |
-| `url` | `string` | never (empty string `""` in the rare case neither URL field is present) | The `pbs.twimg.com`/`video.twimg.com` media URL. **This URL is signed and expires** — treat it as sensitive and expect it to stop working after some time. See [DISCLAIMER.md](../DISCLAIMER.md) and [Security & Privacy](Security-and-Privacy.md). |
+| `url` | `string` | never (empty string `""` in the rare case neither URL field is present) | The `pbs.twimg.com`/`video.twimg.com` media URL. **This URL is signed and expires** — treat it as sensitive and expect it to stop working after some time. See [DISCLAIMER.md](../../DISCLAIMER.md) and [Security & Privacy](Security-and-Privacy.md). |
 | `width` | `integer` or `null` | when the payload didn't include a width | Pixel width, if known. |
 | `height` | `integer` or `null` | same as above | Pixel height, if known. |
 | `alt_text` | `string` or `null` | when the media has no alt text | Image description text, if the poster added one. |
@@ -177,7 +179,7 @@ Note the outer tweet's `text` and its `retweeted_tweet.text` are identical here 
 
 `raw` only appears in the JSON when `--raw` (CLI) or `raw=True` (Python API) was passed. When present, it's the raw `tweet_results.result` node (after unwrapping `TweetWithVisibilityResults`, if applicable) exactly as X's GraphQL response sent it — including fields this tool doesn't otherwise expose. `retweeted_tweet.raw` and `quoted_tweet.raw` are populated the same way, independently, since nested `Tweet`s are built with the same `raw` flag.
 
-By default, `--raw` output still has session-token-shaped fields and signed media-URL query strings scrubbed out of `raw` before it's written (see `redact.py` and [Security & Privacy](Security-and-Privacy.md)). `--raw --no-redact` disables that scrubbing entirely — see [DISCLAIMER.md](../DISCLAIMER.md) before using it. Treat `raw` as sensitive either way.
+By default, `--raw` output still has session-token-shaped fields and signed media-URL query strings scrubbed out of `raw` before it's written (see `redact.py` and [Security & Privacy](Security-and-Privacy.md)). `--raw --no-redact` disables that scrubbing entirely — see [DISCLAIMER.md](../../DISCLAIMER.md) before using it. Treat `raw` as sensitive either way.
 
 ## Schema gotchas
 
@@ -198,8 +200,36 @@ All datetime fields (`created_at` on both `Tweet` and `User`, plus `captured_at`
 
 If you're deduplicating or diffing across repeated fetches, use `id`, not `captured_at` — `captured_at` differs on every run even for a tweet you've already seen.
 
+## `User` as a top-level result
+
+`following`, `followers` and `retweeters` write a JSON array of [`User`](#user) objects (or one per line with `--format ndjson`) — the same `User` shape that appears nested under `Tweet.author`, just promoted to the top level:
+
+```json
+[
+  {
+    "id": "11348282",
+    "screen_name": "NASA",
+    "name": "NASA",
+    "created_at": "2007-12-19T20:20:32Z",
+    "followers_count": 96000000,
+    "following_count": 400,
+    "tweet_count": 75000,
+    "is_blue_verified": true,
+    "description": "Exploring the universe and our home planet.",
+    "url": "https://t.co/abc123"
+  }
+]
+```
+
+Two consequences worth planning for:
+
+- **Check which type you're holding before indexing into it.** A `User` has no `text`; a `Tweet` has no `screen_name` at the top level (its author is nested under `author`). If you merge results from several commands into one pile, the presence of `text` is the cheapest discriminator.
+- **A `User` is a handle, not an answer.** It carries who the account is, never what it posted. To get their tweets, feed `screen_name` back into `fetch`.
+
+There is no separate schema command for this shape — `scrape-x schema` already documents `User` in full, because it is the same dataclass either way.
+
 ## See also
 
 - [CLI Reference](CLI-Reference.md) — how `--since`/`--until`/`--raw`/`--format` map onto this schema
 - [Security & Privacy](Security-and-Privacy.md) — why `media[].url` and `raw` are sensitive
-- [../README.md](../README.md) — the short version of this page, in "Example output"
+- [../README.md](../../README.md) — the short version of this page, in "Example output"

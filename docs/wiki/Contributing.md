@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for considering it. This is a solo-maintained, personal-scale tool, so the bar for contributions is less "does this scale" and more "is this correct, and does it not make the account-ban/PII risk in [../DISCLAIMER.md](../DISCLAIMER.md) worse."
+Thanks for considering it. This is a solo-maintained, personal-scale tool, so the bar for contributions is less "does this scale" and more "is this correct, and does it not make the account-ban/PII risk in [../DISCLAIMER.md](../../DISCLAIMER.md) worse."
 
 ## Dev environment setup
 
@@ -29,7 +29,7 @@ That's it — no flags, no environment variables, no browser. All 81 tests run a
 
 ### Why fixtures are synthetic, not real captures
 
-Every `.json` file in `tests/fixtures/` (`search_timeline.json`, `tweet_detail.json`, `user_tweets.json`) is **hand-authored** — a synthetic skeleton built to exercise a specific shape `parse.py` needs to handle, not a real X capture with names swapped out. That distinction matters mechanically, not just ethically: `parse.py`'s field paths were confirmed by probing a real, logged-in session and reading what actually came back — the fixtures encode the *shapes* that probing discovered, as inert synthetic data, so the test suite can pin those shapes down without ever holding onto a real capture. If a fixture were "real data with the names changed," it would still contain whatever else was inline in that response — other people's handles, tweet text, signed media URLs — which is exactly what [DISCLAIMER.md](../DISCLAIMER.md) says you should never casually hold onto.
+Every `.json` file in `tests/fixtures/` (`following.json`, `home_timeline.json`, `search_timeline.json`, `tweet_detail.json`, `user_tweets.json`) is **hand-authored** — a synthetic skeleton built to exercise a specific shape `parse.py` needs to handle, not a real X capture with names swapped out. That distinction matters mechanically, not just ethically: `parse.py`'s field paths were confirmed by probing a real, logged-in session and reading what actually came back — the fixtures encode the *shapes* that probing discovered, as inert synthetic data, so the test suite can pin those shapes down without ever holding onto a real capture. If a fixture were "real data with the names changed," it would still contain whatever else was inline in that response — other people's handles, tweet text, signed media URLs — which is exactly what [DISCLAIMER.md](../../DISCLAIMER.md) says you should never casually hold onto.
 
 Unlike the fixture rules on some sibling projects, `tests/fixtures/*.json` is **not** gitignored-then-un-ignored-by-name — `.gitignore` only excludes `*.raw.json` (real captures, written under `scratch/`), so a committed fixture and an unsafe raw capture can never collide under one glob. You don't need to touch `.gitignore` to add a new fixture.
 
@@ -53,7 +53,7 @@ If the scan flags something you're confident is a deliberately-fake placeholder 
 
 ## Re-anchoring the parser after an X response-shape change
 
-X's internal GraphQL response shape isn't a stable contract — query-ids rotate and field paths can drift without notice (see `scrape-x doctor --refresh` in the [CLI Reference](CLI-Reference.md)). When `fetch`/`search`/`tweet` start returning zero tweets or missing fields on a shape they used to handle, you'll want a real capture to work from: log in with `scrape-x login`, reproduce the call with `--raw` against your own session, and inspect the saved output locally to see what actually changed. Never commit anything captured this way — hand-author a new synthetic fixture (or edit an existing one) in `tests/fixtures/` that reproduces just the shape that broke, the same way the existing fixtures were built; never derive a committed fixture by lightly editing a real capture.
+X's internal GraphQL response shape isn't a stable contract — query-ids rotate and field paths can drift without notice (see `scrape-x doctor --refresh` in the [CLI Reference](CLI-Reference.md)). When a read command starts returning zero results or missing fields on a shape they used to handle, you'll want a real capture to work from: log in with `scrape-x login`, reproduce the call with `--raw` against your own session, and inspect the saved output locally to see what actually changed. Never commit anything captured this way — hand-author a new synthetic fixture (or edit an existing one) in `tests/fixtures/` that reproduces just the shape that broke, the same way the existing fixtures were built; never derive a committed fixture by lightly editing a real capture.
 
 ## CI
 
@@ -73,12 +73,12 @@ Nothing in CI touches a live X session; nothing in CI can, since there's no logg
 
 Releases are the one part of this workflow where getting the order wrong actually breaks things. Follow this exactly:
 
-1. **Bump the version and changelog.** Edit `version` in `pyproject.toml`, and add a dated entry to `CHANGELOG.md` under a new heading (see the existing `[0.1.0] - 2026-07-05` entry for the format — this project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/)).
+1. **Bump the version and changelog.** Edit `version` in `pyproject.toml`, and add a dated entry to `CHANGELOG.md` under a new heading (see the existing `[0.3.1] - 2026-07-20` entry for the format — this project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/)).
 2. **Commit and push to `main`.**
-3. **Create and publish a GitHub Release** for a tag matching the new version exactly (`vX.Y.Z`, e.g. `v0.2.0` for `pyproject.toml`'s `0.2.0`) — either through the GitHub web UI ("Releases" → "Draft a new release" → pick or create the tag → "Publish release") or with the CLI:
+3. **Create and publish a GitHub Release** for a tag matching the new version exactly (`vX.Y.Z`, e.g. `v0.3.1` for `pyproject.toml`'s `0.3.1`) — either through the GitHub web UI ("Releases" → "Draft a new release" → pick or create the tag → "Publish release") or with the CLI:
 
    ```bash
-   gh release create v0.2.0
+   gh release create v0.3.1
    ```
 
 **Publishing the Release is what triggers the build** — `.github/workflows/publish.yml` fires on the `release: published` event, not on a bare `git push --tags`. Pushing a tag without turning it into a published Release does nothing; the workflow never sees it.
@@ -110,4 +110,4 @@ ruff format .
 
 ---
 
-Questions before you send a PR are welcome — open an issue. See [the wiki index](README.md) for the rest of the wiki, or [../README.md](../README.md) for the project overview.
+Questions before you send a PR are welcome — open an issue. See [the wiki index](README.md) for the rest of the wiki, or [../README.md](../../README.md) for the project overview.

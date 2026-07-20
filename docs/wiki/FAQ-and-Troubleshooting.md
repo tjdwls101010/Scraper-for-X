@@ -4,15 +4,27 @@ Questions people actually ask about this tool, and the errors people actually hi
 
 ## FAQ
 
-### Why do `search` and `fetch --replies` say "not yet implemented"?
+### Why are `search`, `fetch --replies` and `followers` described as less reliable?
 
-Live-verified 2026-07-05, after the rest of this package was already built and tested: unlike `UserTweets` and `TweetDetail` (proven to work over plain `httpx` replay with no `x-client-transaction-id`, the whole premise of this package's harvest-then-replay design — see the README), X's `SearchTimeline` and `UserTweetsAndReplies` GraphQL operations reject a request that's missing this header. Worse, it's **single-use**: replaying a transaction-id captured from a real browser request works exactly once, then every subsequent request with that same value 404s. That means it can't be harvested once (like a query-id) and reused — a fresh, cryptographically-derived value is needed on *every* request, which requires either reimplementing X's transaction-id generator (fragile, high-maintenance, exactly what broke [twikit#408](https://github.com/d60/twikit/issues/408) and exactly what this package's architecture was built to avoid) or driving an actual browser for every search/replies read (the `scrape-fb`-style browser-observe approach).
+Because they are. Those three operations reject any request without an `x-client-transaction-id` header, and that header is single-use — a real one captured from X's own client 404s the moment you replay it. Since v0.3.0 this package generates a fresh one per request from ingredients x.com serves on its home page, which is why the three commands work at all. It is also reverse-engineered code that X can invalidate with any client deploy.
 
-`scrape-x search` and `scrape-x fetch --replies` (and the Python API's `search()`/`fetch_user_tweets(replies=True)`/`iter_user_tweets(replies=True)`) fail immediately with a clear `FeatureNotImplementedError`/exit code `1`, rather than a confusing 404 buried in a stack trace. A browser-observe fallback for these two operations specifically is on the roadmap; `scrape-x fetch` (without `--replies`) and `scrape-x tweet` are unaffected and fully working.
+The full story — how the header is generated, the two different ways it fails, why the browser fallback only returns one page, and how to tell all this apart from ordinary query-id rotation — is in [Transaction-ID](Transaction-ID.md). Everything else (`feed`, `fetch` without `--replies`, `tweet`, `following`, `retweeters`) never touches that code path.
+
+### Who liked this tweet? Who quoted it?
+
+**Likers: not available, and not coming.** X removed the likers list from its product. `/status/<id>/likes` redirects to the tweet itself, and the operation name appears in none of the JavaScript x.com serves (checked across all 685 chunks, 2026-07-20). There is no `likers` command because there is nothing to call. `scrape-x retweeters <id>` is the closest real signal.
+
+**Quoters: use search.** `scrape-x search "quoted_tweet_id:<id>"` returns a tweet's quote-tweets. That is exactly what X's own /quotes tab issues, which is why there is no separate command.
+
+### Why did `following` return one account and stop?
+
+Look at the stop reason: `empty_pages`. X pads some follow lists with pages that carry a fresh cursor and no accounts, indefinitely — measured on `@X`, which yields one account and then empty pages until the request budget runs out. Rather than spend 250 seconds collecting nothing, the run gives up after three consecutive account-less pages.
+
+It means *we stopped*, not *the list ended*. Treat such a result as incomplete; do not report it as somebody's full following list. This is why it is not reported as `feed_exhausted` — see [CLI Reference](CLI-Reference.md#the-empty_pages-stop-reason).
 
 ### Will my account get banned?
 
-It can. Read [../DISCLAIMER.md](../DISCLAIMER.md) — it's not boilerplate. Automating any X account, including just driving a real logged-in session to read what it can already see, is against X's Terms of Service, and X enforces that with suspensions, permanent bans, and account-security challenges.
+It can. Read [../DISCLAIMER.md](../../DISCLAIMER.md) — it's not boilerplate. Automating any X account, including just driving a real logged-in session to read what it can already see, is against X's Terms of Service, and X enforces that with suspensions, permanent bans, and account-security challenges.
 
 The guardrails in this tool reduce risk, they don't remove it:
 
@@ -21,17 +33,17 @@ The guardrails in this tool reduce risk, they don't remove it:
 - Deeper `--since`/`--limit` runs make more requests, which raises both rate-limit and account-flag risk in the same breath.
 - `scrape-x doctor` lets you check session health without guessing.
 
-None of that makes this safe for your primary account. **Use a dedicated or throwaway X account**, not the one you actually care about. See [DISCLAIMER.md §1 and §7](../DISCLAIMER.md#1-this-violates-xs-terms-of-service).
+None of that makes this safe for your primary account. **Use a dedicated or throwaway X account**, not the one you actually care about. See [DISCLAIMER.md §1 and §7](../../DISCLAIMER.md#1-this-violates-xs-terms-of-service).
 
 ### Is this legal? Does it violate X's ToS?
 
-It violates X's Terms of Service — that part isn't in question. Whether that's *illegal* depends on your jurisdiction, what you do with the data afterward, and facts specific to your situation, so no honest answer fits in a wiki FAQ. This is not legal advice, and [DISCLAIMER.md](../DISCLAIMER.md) says so explicitly.
+It violates X's Terms of Service — that part isn't in question. Whether that's *illegal* depends on your jurisdiction, what you do with the data afterward, and facts specific to your situation, so no honest answer fits in a wiki FAQ. This is not legal advice, and [DISCLAIMER.md](../../DISCLAIMER.md) says so explicitly.
 
-Read the whole thing, particularly [§2](../DISCLAIMER.md#2-x-is-notably-litigious-about-scraping--but-read-the-outcomes-honestly) on X's litigation history (enforcement has skewed toward commercial mass-scrapers and data brokers, not solo personal-scale reads — though the exposure is still real) and [§4](../DISCLAIMER.md#4-you-may-become-a-data-controller-for-other-peoples-data) on becoming a "data controller" over other people's data once you've captured it, which carries real weight under GDPR independent of whether scraping itself is illegal where you live. If it matters to your situation, talk to a lawyer.
+Read the whole thing, particularly [§2](../../DISCLAIMER.md#2-x-is-notably-litigious-about-scraping--but-read-the-outcomes-honestly) on X's litigation history (enforcement has skewed toward commercial mass-scrapers and data brokers, not solo personal-scale reads — though the exposure is still real) and [§4](../../DISCLAIMER.md#4-you-may-become-a-data-controller-for-other-peoples-data) on becoming a "data controller" over other people's data once you've captured it, which carries real weight under GDPR independent of whether scraping itself is illegal where you live. If it matters to your situation, talk to a lawyer.
 
 ### Can I run this on a server or VPS?
 
-You can, but it works against you in a specific way: **run `scrape-x` from the same network/IP the session was established on.** If you logged in via `scrape-x login` on your laptop, replay from that same laptop/network. If you imported cookies exported from a browser session on your home connection, replaying that session from a datacenter or VPN IP is exactly the kind of signal X's abuse systems weight — an abrupt IP or client change against an existing session can soft-lock it (`status: expired`) or trigger a security challenge, even without an outright ban. This is X-specific, not a general scraping-tool caution — see [DISCLAIMER.md §7](../DISCLAIMER.md#7-account-ban-risk-and-how-to-reduce-it) and plan §17's `G-ip-origin`.
+You can, but it works against you in a specific way: **run `scrape-x` from the same network/IP the session was established on.** If you logged in via `scrape-x login` on your laptop, replay from that same laptop/network. If you imported cookies exported from a browser session on your home connection, replaying that session from a datacenter or VPN IP is exactly the kind of signal X's abuse systems weight — an abrupt IP or client change against an existing session can soft-lock it (`status: expired`) or trigger a security challenge, even without an outright ban. This is X-specific, not a general scraping-tool caution — see [DISCLAIMER.md §7](../../DISCLAIMER.md#7-account-ban-risk-and-how-to-reduce-it) and plan §17's `G-ip-origin`.
 
 If you need this running somewhere other than where you logged in, the safer version of "somewhere else" is a machine on the *same* network/egress IP as the login, not a different one.
 
@@ -42,7 +54,7 @@ Two things, not one:
 1. **Log out of that session on x.com itself** — Settings → Security and account access → Apps and sessions (or wherever X currently surfaces active sessions), and end the session associated with this tool. This is the only step that actually invalidates the `auth_token`/`ct0` X-side; everything else is just cleaning up your local copy.
 2. **Delete the local profile directory** — `scrape-x` stores the session credential as `session.json` inside your profile directory (default under `platformdirs`' user-data path, or wherever `--profile-dir`/`SFX_PROFILE_DIR` pointed). Deleting it removes the file from disk, but does **not** revoke it on X's side — a copy made before deletion (backup, sync, another machine) would still work until you do step 1.
 
-Do both if the machine or disk holding the credential was ever lost, shared, or possibly compromised. See [DISCLAIMER.md §8](../DISCLAIMER.md#8-your-session-credential-is-a-live-password-less-login--protect-it) — the on-disk file is a live, password-less login, and `0700`/`0600` permissions are the entire enforcement mechanism, not encryption.
+Do both if the machine or disk holding the credential was ever lost, shared, or possibly compromised. See [DISCLAIMER.md §8](../../DISCLAIMER.md#8-your-session-credential-is-a-live-password-less-login--protect-it) — the on-disk file is a live, password-less login, and `0700`/`0600` permissions are the entire enforcement mechanism, not encryption.
 
 ## Troubleshooting
 
@@ -88,14 +100,18 @@ If this keeps happening right after every fresh login, check whether you're repl
 
 X's per-15-minute limits on the read operations this tool uses are genuinely tight:
 
-| Operation | Limit per 15 min |
-|---|---|
-| `UserTweets` / `UserTweetsAndReplies` | 50 |
-| `SearchTimeline` | 50 |
-| `TweetDetail` | 150 |
-| `UserByScreenName` | 95 |
+| Command | Operation | Limit per 15 min |
+|---|---|---|
+| `fetch` | `UserTweets` / `UserTweetsAndReplies` | ~50 |
+| `search` | `SearchTimeline` | ~50 |
+| `followers` | `Followers` | ~50 |
+| `tweet` | `TweetDetail` | ~150 |
+| (internal handle lookup) | `UserByScreenName` | ~150 |
+| `feed` | `HomeTimeline` | ~500 |
+| `following` | `Following` | ~500 |
+| `retweeters` | `Retweeters` | ~500 |
 
-A single deep `fetch --since` pull against a prolific account can burn through 50 `UserTweets` calls faster than expected, since each page of the timeline is one request. `scrape-x` honors `x-rate-limit-remaining`/`x-rate-limit-reset` and never blind-retries a 429 — by default it stops cleanly with a partial result and exit code `3`. If you'd rather it wait out the window automatically:
+**The budgets differ by an order of magnitude, and that should shape how you work.** A deep `search` or `fetch` chain exhausts its window quickly — each page of a timeline is one request — while the same number of `feed` or `following` calls costs almost nothing. If you are chaining commands, spend the cheap ones freely and the expensive ones deliberately. `scrape-x` honors `x-rate-limit-remaining`/`x-rate-limit-reset` and never blind-retries a 429 — by default it stops cleanly with a partial result and exit code `3`. If you'd rather it wait out the window automatically:
 
 ```bash
 scrape-x fetch nasa --since 2025-01-01 --wait-on-limit --max-wait 900
@@ -128,4 +144,4 @@ Open an issue at <https://github.com/tjdwls101010/Scraper-for-X/issues>. Useful 
 - The exact command you ran and its exit code.
 - The `-v`/`--verbose` stderr output. This is safe to paste as-is — diagnostics are routed through this tool's single redaction path, which strips session-token-shaped fields, `pbs.twimg.com`/`video.twimg.com` query strings, and truncates tweet text and names before anything reaches your terminal.
 
-**Never paste raw captured tweet output**, and never run with `--raw --no-redact` to generate a bug report. `--raw` alone still redacts the captured tweet's raw node by default; `--no-redact` turns that off entirely and prints an on-screen warning for a reason — the result is other people's tweet text, names, and session fragments in the clear. If you need to show a maintainer what a malformed capture looks like, use the default redacted `--raw` output, not `--no-redact`, and still review it yourself before posting publicly. See [DISCLAIMER.md §6](../DISCLAIMER.md#6-diagnostics-are-redacted--but-redaction-is-not-a-certification) for exactly what redaction does and doesn't guarantee.
+**Never paste raw captured tweet output**, and never run with `--raw --no-redact` to generate a bug report. `--raw` alone still redacts the captured tweet's raw node by default; `--no-redact` turns that off entirely and prints an on-screen warning for a reason — the result is other people's tweet text, names, and session fragments in the clear. If you need to show a maintainer what a malformed capture looks like, use the default redacted `--raw` output, not `--no-redact`, and still review it yourself before posting publicly. See [DISCLAIMER.md §6](../../DISCLAIMER.md#6-diagnostics-are-redacted--but-redaction-is-not-a-certification) for exactly what redaction does and doesn't guarantee.
