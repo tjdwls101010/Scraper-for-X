@@ -145,7 +145,22 @@ def _add_common_fetch_args(parser: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = _ArgumentParser(prog="scrape-x", description="Read-only X/Twitter scraper.")
+    parser = _ArgumentParser(
+        prog="scrape-x",
+        description=(
+            "Read-only X/Twitter scraper. Log in once, then read over plain HTTP: "
+            "your home feed, a profile's tweets and replies, a tweet's thread, search, "
+            "and the social graph. Every command is a single-target primitive that "
+            "writes JSON — chain them yourself for multi-hop exploration. "
+            "`scrape-x catalog` describes this whole surface as JSON; "
+            "`scrape-x schema` describes what comes back."
+        ),
+        epilog=(
+            "search, fetch --replies and followers depend on a reverse-engineered "
+            "x-client-transaction-id and can break when X changes it (exit 4). "
+            "Read DISCLAIMER.md before using this; use a throwaway account."
+        ),
+    )
     parser.add_argument("--version", action="version", version=f"scrape-x {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -197,6 +212,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--refresh",
         action="store_true",
         help="Also re-anchor query-ids via x.com's main.js (browser-free).",
+    )
+
+    subparsers.add_parser(
+        "catalog",
+        help="Emit a machine-readable description of this CLI as JSON (offline).",
+        description=(
+            "Emit a machine-readable description of every command, argument and exit "
+            "code as JSON, derived from the parser itself. Intended for agents driving "
+            "scrape-x; pair it with `scrape-x schema --json` for the output shape."
+        ),
     )
 
     schema_p = subparsers.add_parser(
@@ -421,6 +446,107 @@ def _cmd_schema(args: argparse.Namespace) -> int:
     _print_schema_object("Tweet", "one element of the output array", tweet_schema_fields())
     _print_schema_object("User", "Tweet.author", user_schema_fields())
     _print_schema_object("Media", "an element of Tweet.media", media_schema_fields())
+    return 0
+
+
+#: Bumped when the catalog's SHAPE changes, so a consumer pinned to an older
+#: contract can detect the difference instead of guessing.
+CATALOG_VERSION = 1
+
+#: What top-level object each read command writes. Not derivable from argparse
+#: -- but `test_cli.py` asserts every read command appears here, so a new
+#: command cannot silently ship without declaring its output.
+_COMMAND_OUTPUT = {
+    "fetch": "Tweet",
+    "feed": "Tweet",
+    "search": "Tweet",
+    "tweet": "Tweet",
+    "following": "User",
+    "followers": "User",
+    "retweeters": "User",
+}
+
+#: The exit-code contract. Hand-written because the codes are returned from a
+#: dozen places; kept honest by `test_cli.py`, which asserts each mapped error
+#: type actually produces its documented code.
+_EXIT_CODES = {
+    0: "success",
+    1: "usage error, invalid identifier, or an unexpected failure",
+    2: "not logged in, session expired, or soft-locked",
+    3: "rate-limited (see --wait-on-limit)",
+    4: "X's response no longer matches what this package expects "
+    "(query-id drift, or the transaction-id generator has rotted)",
+    5: "the target user or tweet does not exist / is unavailable",
+    7: "--since was requested but the run stopped before confirming it was reached",
+}
+
+
+def _argument_catalog(parser: argparse.ArgumentParser) -> list[dict]:
+    """Describe one subparser's arguments, read off the parser itself."""
+    arguments = []
+    for action in parser._actions:
+        if isinstance(action, argparse._HelpAction):
+            continue
+        arguments.append(
+            {
+                "name": action.dest,
+                "flags": list(action.option_strings),
+                "positional": not action.option_strings,
+                "required": action.required,
+                "default": action.default,
+                "choices": list(action.choices) if action.choices else None,
+                "is_flag": isinstance(
+                    action, argparse._StoreTrueAction | argparse._StoreFalseAction
+                ),
+                "help": action.help,
+            }
+        )
+    return arguments
+
+
+def build_catalog() -> dict:
+    """A machine-readable description of this CLI, derived from the parser.
+
+    Exists so an agent can learn the command surface in ONE call instead of
+    parsing prose out of a dozen ``--help`` screens. Everything about commands
+    and arguments is read from ``build_parser()``, which is the same object
+    that actually parses input -- so the catalog cannot drift from the CLI the
+    way a hand-maintained document would.
+
+    What it deliberately does NOT carry is judgment: which ops are fragile,
+    how rate budgets are shared, when to stop a multi-hop crawl. That belongs
+    to whoever is driving these primitives, not to a description of them.
+    """
+    parser = build_parser()
+    subparsers_action = next(
+        action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
+    )
+    # Most subcommands pass only `help=`, which argparse keeps on a pseudo-action
+    # rather than on the subparser, so read both and prefer the fuller one.
+    summaries = {choice.dest: choice.help or "" for choice in subparsers_action._choices_actions}
+    commands = []
+    for name, subparser in subparsers_action.choices.items():
+        commands.append(
+            {
+                "name": name,
+                "help": subparser.description or summaries.get(name, ""),
+                "output": _COMMAND_OUTPUT.get(name),
+                "arguments": _argument_catalog(subparser),
+            }
+        )
+    return {
+        "catalog_version": CATALOG_VERSION,
+        "package": "scraper-for-x",
+        "command": "scrape-x",
+        "version": __version__,
+        "commands": commands,
+        "exit_codes": {str(code): text for code, text in _EXIT_CODES.items()},
+        "output_schema": "scrape-x schema --json",
+    }
+
+
+def _cmd_catalog(args: argparse.Namespace) -> int:
+    print(json.dumps(build_catalog(), indent=2))
     return 0
 
 
@@ -848,6 +974,7 @@ _HANDLERS = {
     "setup": _cmd_setup,
     "doctor": _cmd_doctor,
     "schema": _cmd_schema,
+    "catalog": _cmd_catalog,
     "fetch": _cmd_fetch,
     "feed": _cmd_feed,
     "search": _cmd_search,

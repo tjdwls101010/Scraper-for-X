@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scraper-for-x"
-version = "0.2.0"
+version = "0.3.0"
 description = "Read-only scraping of logged-in X/Twitter data via a harvest-then-replay hybrid: a stealth-browser login harvests the session once, then reads are replayed over httpx. No client-transaction-id replay."
 readme = "README.md"
 license = "MIT"

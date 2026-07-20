@@ -1,7 +1,16 @@
 import argparse
 
 from scraper_for_x import cli
-from scraper_for_x.errors import LoginRequiredError, TransactionIdError
+from scraper_for_x.errors import (
+    InvalidIdentifierError,
+    LoginRequiredError,
+    NotFoundError,
+    ProfileUnavailableError,
+    RateLimitedError,
+    SessionExpiredError,
+    TransactionIdError,
+)
+from scraper_for_x.parse import EnvelopeParseError
 
 
 def test_cmd_doctor_handles_unexpected_exception_cleanly(monkeypatch):
@@ -159,3 +168,68 @@ def test_there_is_no_likers_command():
     assert "likers" not in cli._GRAPH_OPERATIONS
     with pytest.raises(SystemExit):
         cli.build_parser().parse_args(["likers", "123"])
+
+
+# --- catalog: the delegated command-surface contract --------------------------
+
+
+def test_catalog_exits_0_and_is_valid_json(capsys):
+    assert cli.main(["catalog"]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["catalog_version"] == cli.CATALOG_VERSION
+    assert doc["command"] == "scrape-x"
+
+
+def test_catalog_lists_every_subcommand():
+    """Derived from build_parser(), so it cannot drift from the real CLI --
+    this pins that the derivation actually covers everything."""
+    doc = cli.build_catalog()
+    listed = {c["name"] for c in doc["commands"]}
+    assert listed == set(cli._HANDLERS)
+
+
+def test_catalog_describes_arguments_with_types_and_defaults():
+    doc = cli.build_catalog()
+    search = next(c for c in doc["commands"] if c["name"] == "search")
+    by_name = {a["name"]: a for a in search["arguments"]}
+    assert by_name["query"]["positional"] is True
+    assert by_name["product"]["choices"] == ["latest", "top"]
+    assert by_name["product"]["default"] == "latest"
+    assert by_name["raw"]["is_flag"] is True
+
+
+def test_every_read_command_declares_its_output_object():
+    """A new read command must say whether it emits Tweets or Users; without
+    this an agent reading the catalog would have to guess."""
+    for command in cli._HANDLERS:
+        entry = next(c for c in cli.build_catalog()["commands"] if c["name"] == command)
+        if command in ("login", "status", "setup", "doctor", "schema", "catalog"):
+            assert entry["output"] is None
+        else:
+            assert entry["output"] in ("Tweet", "User"), command
+
+
+def test_catalog_exit_codes_match_the_real_error_mapping():
+    """The exit-code table is hand-written (the codes are returned from a dozen
+    places). This asserts each documented code is the one actually produced, so
+    the table cannot quietly go stale."""
+    args = argparse.Namespace(profile="default", verbose=False)
+    expected = {
+        LoginRequiredError("x"): 2,
+        SessionExpiredError("x"): 2,
+        RateLimitedError("x"): 3,
+        EnvelopeParseError("x"): 4,
+        TransactionIdError("x"): 4,
+        ProfileUnavailableError("x"): 5,
+        NotFoundError("x"): 5,
+        InvalidIdentifierError("x"): 1,
+    }
+    for error, code in expected.items():
+        assert cli._handle_common_errors(error, args) == code, type(error).__name__
+        assert str(code) in cli.build_catalog()["exit_codes"]
+
+
+def test_catalog_points_at_the_output_schema_command():
+    """The two contracts are complementary: catalog = how to call it,
+    schema --json = what comes back."""
+    assert cli.build_catalog()["output_schema"] == "scrape-x schema --json"

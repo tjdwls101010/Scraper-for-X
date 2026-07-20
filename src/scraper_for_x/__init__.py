@@ -9,7 +9,7 @@ actually called.
 
 from __future__ import annotations
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from collections.abc import Iterator
 from datetime import UTC, date, datetime
@@ -92,9 +92,10 @@ def _parse_until(value: str | date | None) -> datetime | None:
 class XScraper:
     """Read-only X/Twitter client: harvest-then-replay hybrid (plan §3).
 
-    A stealth-browser login (or cookie import) harvests a session once;
-    all reads afterward go over `httpx` with no `x-client-transaction-id`
-    (plan §0, §8). See DISCLAIMER.md first.
+    A stealth-browser login (or cookie import) harvests a session once; all
+    reads afterward go over `httpx`. Most ops need no `x-client-transaction-id`;
+    the three that do get one generated per request (see `transaction.py`).
+    See DISCLAIMER.md first.
     """
 
     def __init__(
