@@ -66,12 +66,22 @@ This matters more for this package than it would for most, and that is the actua
 
 Structural: **`validate_harness.py` passed 2026-07-20 — 0 errors, 0 warnings.** No hooks were generated, so `test_hook.py` does not apply.
 
-Scenarios for live e2e (deferred — the user has scheduled a broad e2e pass after this skill exists):
-1. **Should trigger:** "what has @nasa been posting lately" · "check my X feed" · a bare `x.com/<user>/status/<id>` URL.
-2. **Should NOT trigger:** "add a `--json` flag to scrape-x's schema command" (repo work) · "find me posts on Instagram" (wrong network).
-3. **Behavioural:** given a stale installed version, the skill announces the gap and upgrades before retrieving.
-4. **Behavioural:** given a `following` result whose `stop_reason` is `empty_pages`, the skill reports the list as incomplete rather than as the full set.
+**Live e2e ran 2026-07-20 against the real installed CLI — 4/4 scenarios passed.** Run artifacts were deleted afterwards (they contain scraped third-party data and full transcripts); `.claude/.e2e-runs/` is now gitignored so a future run cannot be committed by accident.
+
+| # | Scenario | Expected | Result |
+|---|---|---|---|
+| V1 | "What has @nasa been tweeting lately? Just the last 5." | Trigger; detect the stale install; upgrade; retrieve via `--output`; clean up | **Pass** — skill invoked, found 0.2.0 vs PyPI latest, ran `uv tool install --upgrade`, read the file, then deleted it unprompted |
+| V2 | "Add a --format csv option to scrape-x's fetch command." | Must NOT trigger — repo work | **Pass** — `skill invocations: []`; did ordinary code work instead |
+| V3 | "Find me some recent posts about AI on Instagram." | Must NOT trigger — wrong network | **Pass** — `skill invocations: []`; declined and offered the in-scope alternative |
+| V4 | "Who does the @X account follow? Give me the list." | Hit `empty_pages` and report the list as incomplete | **Pass** — refused to present 1 account as the full list, naming `empty_pages` as the reason |
+
+**Headless permission handling is now confirmed working** for this project — `run_e2e.py`'s `claude -p` invocation completed all four scenarios with no auth failure and no permission stall. The caveat in `references/e2e-testing.md` no longer needs re-litigating here.
+
+**One real defect found and fixed (V1).** The version check read the installed version out of `scrape-x catalog`, but `catalog` did not exist before v0.3.0 — so the command crashed with a JSON traceback on exactly the stale installs the step exists to catch. The model recovered on its own, but the skill had handed it a broken command. Now reads `scrape-x --version`, which has existed in every release. Verified directly by downgrading to 0.2.0: the old command raised `JSONDecodeError`, the new one printed `scrape-x 0.2.0`.
+
+**One non-defect worth recording.** V1's upgrade landed on 0.3.0 while PyPI already listed 0.3.1 — the simple index was still propagating, seconds after the release. A retry moments later resolved 0.3.1 correctly, so `uv tool install --upgrade --no-cache` is right; the skill now says to verify the version after upgrading rather than assume it landed.
 
 ## Change history
 
+- **2026-07-20 — validated.** Live e2e, 4/4 passed. Found and fixed the version-check crash on stale installs; confirmed headless e2e works in this project.
 - **2026-07-20 — new.** First harness pass. Recovered a spec for a repo that had a CLAUDE.md and an empty `.claude/skills/x/`, then specified and generated the `x` retrieval skill. Notable: D2 reverses the sibling skill's version-check stance at the user's challenge.

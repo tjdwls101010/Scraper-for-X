@@ -15,11 +15,11 @@ This package tracks a moving target. X rotates its GraphQL query-ids every 2–4
 That is why you check the version rather than waiting for a symptom. A successful command proves its output is correct *for the build you have*; it says nothing about whether that is the build you should have. Checking costs about 40ms:
 
 ```bash
-scrape-x catalog | python3 -c "import json,sys; print(json.load(sys.stdin)['version'])"
+scrape-x --version                                       # -> "scrape-x 0.3.1"
 curl -s https://pypi.org/simple/scraper-for-x/ | grep -oE 'scraper_for_x-[0-9]+\.[0-9]+\.[0-9]+' | sed 's/.*-//' | sort -V | tail -1
 ```
 
-`catalog` always emits JSON; `--json` is accepted but does nothing.
+Read the installed version from `--version`, not from `catalog`. `--version` has existed in every release; `catalog` has not, so reading the version out of it crashes on exactly the old installs this step exists to catch.
 
 If the installed version is behind, say so in one line and upgrade before doing the user's actual work — don't ask, and don't do it silently, because a mid-task version change has to be diagnosable if results look strange:
 
@@ -32,6 +32,8 @@ uv tool install --upgrade --no-cache scraper-for-x    # or: pipx upgrade scraper
 Check once, at the start. The installed version cannot change underneath you unless you change it, so re-checking between commands buys nothing — the only reason to check again in a session is that something failed in a way Step 1 might explain.
 
 Read the PyPI version from the **simple index** as above, not from `pypi.org/pypi/scraper-for-x/json`. Measured: minutes after a release, the JSON endpoint still reported the *previous* version while the simple index was already correct. A check that trusts the JSON API alone can conclude "already latest" about a release that demonstrably exists.
+
+The same lag can leave an upgrade one release short — the install succeeds, and the version afterwards still isn't the one PyPI just listed. If that happens, the index was mid-propagation, not the command wrong: re-run it. Verify with `scrape-x --version` after upgrading rather than assuming the upgrade landed where you wanted.
 
 **If it isn't installed at all** (`command not found`):
 

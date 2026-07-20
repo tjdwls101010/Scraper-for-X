@@ -30,3 +30,6 @@ profiles/
 # capture dropped into the same directory).
 
 .DS_Store
+
+# Harness e2e run artifacts: transcripts + scraped third-party data.
+.claude/.e2e-runs/
