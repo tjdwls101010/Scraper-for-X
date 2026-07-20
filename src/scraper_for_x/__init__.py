@@ -110,6 +110,9 @@ class XScraper:
         self._min_request_pause = min_request_pause
         self._max_requests = max_requests
         self.last_result: RetrieveResult | None = None
+        #: Set by the social-graph reads, which return Users rather than
+        #: Tweets and so cannot share `last_result`.
+        self.last_user_result: retrieve_module.UserResult | None = None
 
         self._entered = False
         self._closed = False
@@ -305,6 +308,97 @@ class XScraper:
         )
         self.last_result = result
         return result.tweets
+
+    def _social_graph(
+        self,
+        operation: str,
+        identifier: str,
+        *,
+        by: str | None,
+        limit: int | None,
+        wait_on_limit: bool,
+        max_wait: float | None,
+    ) -> list[User]:
+        self._require_entered()
+        if operation == "Retweeters":
+            kind, value = "id", auth.normalize_tweet_identifier(identifier)
+        else:
+            kind, value = auth.normalize_identifier(identifier, by=by)
+        result = retrieve_module.fetch_social_graph(
+            self._read_client,
+            self._query_ids,
+            self._features,
+            operation,
+            kind,
+            value,
+            limit=limit,
+            wait_on_limit=wait_on_limit,
+            max_wait=max_wait,
+        )
+        self.last_user_result = result
+        return result.users
+
+    def fetch_following(
+        self,
+        identifier: str,
+        *,
+        by: str | None = None,
+        limit: int | None = None,
+        wait_on_limit: bool = False,
+        max_wait: float | None = None,
+    ) -> list[User]:
+        """Accounts a user follows. Returns `User`, not `Tweet`."""
+        return self._social_graph(
+            "Following",
+            identifier,
+            by=by,
+            limit=limit,
+            wait_on_limit=wait_on_limit,
+            max_wait=max_wait,
+        )
+
+    def fetch_followers(
+        self,
+        identifier: str,
+        *,
+        by: str | None = None,
+        limit: int | None = None,
+        wait_on_limit: bool = False,
+        max_wait: float | None = None,
+    ) -> list[User]:
+        """Accounts following a user. Needs a generated transaction id."""
+        return self._social_graph(
+            "Followers",
+            identifier,
+            by=by,
+            limit=limit,
+            wait_on_limit=wait_on_limit,
+            max_wait=max_wait,
+        )
+
+    def fetch_retweeters(
+        self,
+        identifier: str,
+        *,
+        limit: int | None = None,
+        wait_on_limit: bool = False,
+        max_wait: float | None = None,
+    ) -> list[User]:
+        """Accounts that retweeted a tweet.
+
+        There is no `fetch_likers`: X no longer exposes a likers list at all
+        (probed live 2026-07-20). For quoters, use
+        `search("quoted_tweet_id:<id>")` -- which is what X's own /quotes tab
+        does.
+        """
+        return self._social_graph(
+            "Retweeters",
+            identifier,
+            by=None,
+            limit=limit,
+            wait_on_limit=wait_on_limit,
+            max_wait=max_wait,
+        )
 
     def search(
         self,

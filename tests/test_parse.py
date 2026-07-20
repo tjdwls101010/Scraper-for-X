@@ -180,3 +180,37 @@ def test_home_timeline_module_entries_are_skipped(load_fixture):
     body = load_fixture("home_timeline.json")
     raw_tweets, _ = parse.walk_instructions(body, "HomeTimeline")
     assert len(raw_tweets) == 2
+
+
+def test_walk_user_instructions_returns_users_and_cursor(load_fixture):
+    """The social-graph ops share the timeline envelope SHAPE with the tweet ops
+    but carry `user-` entries with `user_results`, so they need their own walk."""
+    body = load_fixture("following.json")
+    raw_users, cursor = parse.walk_user_instructions(body, "Following")
+    assert [u["rest_id"] for u in raw_users] == ["8001", "8002"]
+    assert cursor == "CURSOR_BOTTOM_FOLLOWING_PAGE1"
+
+
+def test_walk_user_instructions_skips_non_user_entries(load_fixture):
+    """A who-to-follow module and the Top cursor sit in the same entries list
+    and must not be mistaken for accounts."""
+    body = load_fixture("following.json")
+    raw_users, _ = parse.walk_user_instructions(body, "Following")
+    assert len(raw_users) == 2
+
+
+def test_walk_user_instructions_raises_on_a_missing_envelope():
+    with pytest.raises(EnvelopeParseError):
+        parse.walk_user_instructions({"data": {}}, "Retweeters")
+
+
+def test_retweeters_has_its_own_envelope_root():
+    """Following/Followers reuse the profile-timeline root; Retweeters does not
+    (live-captured 2026-07-20)."""
+    assert parse.USER_ENVELOPE_ROOTS["Retweeters"] == (
+        "data",
+        "retweeters_timeline",
+        "timeline",
+        "instructions",
+    )
+    assert parse.USER_ENVELOPE_ROOTS["Following"] == parse.USER_ENVELOPE_ROOTS["Followers"]

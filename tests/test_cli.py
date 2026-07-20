@@ -137,3 +137,25 @@ def test_transaction_id_failure_maps_to_exit_4():
     args = argparse.Namespace(profile="default", verbose=False)
     code = cli._handle_common_errors(TransactionIdError("no verification meta tag"), args)
     assert code == 4
+
+
+def test_social_graph_commands_exist_and_reach_the_session(monkeypatch):
+    monkeypatch.setattr(cli.auth, "load_session", _raise_login_required)
+    for command in ("following", "followers", "retweeters"):
+        assert cli.main([command, "783214"]) == 2
+
+
+def test_followers_help_warns_about_the_transaction_id(capsys):
+    """Followers is gated but Following is not -- proven live, not assumed. The
+    help must reflect that asymmetry rather than warning about both or neither."""
+    assert "transaction" in _help_text(capsys, ["followers", "--help"])
+    assert "transaction" not in _help_text(capsys, ["following", "--help"])
+
+
+def test_there_is_no_likers_command():
+    """X no longer exposes a likers list at all (probed live 2026-07-20:
+    /likes redirects to the tweet and the op is in none of its JS chunks).
+    Shipping a `likers` command would promise something X cannot deliver."""
+    assert "likers" not in cli._GRAPH_OPERATIONS
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["likers", "123"])

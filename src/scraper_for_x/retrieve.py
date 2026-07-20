@@ -33,8 +33,21 @@ STOP_REASONS = frozenset(
         # reach it without the transaction id) and from "max_requests" (no
         # budget was hit).
         "browser_observed",
+        # Social-graph only: X kept advancing the cursor while returning no
+        # accounts. NOT "feed_exhausted" -- we did not reach the end, we gave
+        # up. See _EMPTY_USER_PAGE_LIMIT.
+        "empty_pages",
     }
 )
+
+#: How many consecutive account-less pages end a social-graph run.
+#: LIVE-OBSERVED 2026-07-20: @X's `Following` returns one account and then
+#: cursor-only pages indefinitely, each with a NEW cursor. The tweet loop's
+#: rule -- only a non-advancing cursor means EOF (§17 G-cursor-eof) -- therefore
+#: never fires here and burns the whole request budget (~250s) for one account.
+#: Deliberately scoped to the User-returning ops, where this was actually
+#: observed; the tweet loop is untouched.
+_EMPTY_USER_PAGE_LIMIT = 3
 
 #: Fallback per-run request budget when the caller doesn't set one (plan §9).
 _DEFAULT_MAX_REQUESTS = 500
@@ -582,3 +595,141 @@ def fetch_tweet(
     if not result.tweets and result.stop_reason in ("feed_exhausted", "max_requests"):
         raise errors.NotFoundError(f"tweet {tweet_id} not found (deleted, or thread unavailable)")
     return result
+
+
+@dataclass
+class UserResult:
+    """A social-graph run's output. Parallel to `RetrieveResult`, not a variant
+    of it: these ops return `User` objects, and folding them into a field named
+    `tweets` would make the type lie."""
+
+    users: list[model.User]
+    stop_reason: str
+    requests_made: int
+
+
+def paginate_users(
+    read_client,
+    operation: str,
+    query_id: str,
+    features: dict,
+    build_variables,
+    *,
+    limit: int | None = None,
+    max_requests: int | None = None,
+    wait_on_limit: bool = False,
+    max_wait: float | None = None,
+) -> UserResult:
+    """Cursor-paginate a User-returning op.
+
+    A deliberate sibling of `paginate` rather than a parameter on it: the two
+    differ in parse function, element type, and stop conditions (there is no
+    since/until on a follower list, and no pinned entry), so sharing would be
+    a branch on every line rather than reuse.
+    """
+    seen_ids: set[str] = set()
+    users: list[model.User] = []
+    cursor: str | None = None
+    budget = _DEFAULT_MAX_REQUESTS if max_requests is None else max_requests
+    stop_reason = "feed_exhausted"
+    empty_pages = 0
+
+    while True:
+        if read_client.requests_made >= budget:
+            stop_reason = "max_requests"
+            break
+
+        try:
+            body = read_client.get(query_id, operation, build_variables(cursor), features)
+        except errors.RateLimitedError as exc:
+            if wait_on_limit and exc.reset_at is not None:
+                wait_seconds = max(0.0, exc.reset_at - time.time())
+                if max_wait is not None:
+                    wait_seconds = min(wait_seconds, max_wait)
+                print(
+                    f"scrape-x: waiting {int(wait_seconds)}s until rate-limit reset",
+                    file=sys.stderr,
+                )
+                time.sleep(wait_seconds)
+                continue
+            stop_reason = "rate_limited"
+            break
+
+        raw_users, next_cursor = parse.walk_user_instructions(body, operation)
+
+        stop_now = False
+        added = 0
+        for raw_user in raw_users:
+            user = model.build_user(raw_user)
+            if user is None or user.id in seen_ids:
+                continue
+            seen_ids.add(user.id)
+            users.append(user)
+            added += 1
+            if limit is not None and len(users) >= limit:
+                stop_reason = "limit_reached"
+                stop_now = True
+                break
+
+        if stop_now:
+            break
+
+        empty_pages = 0 if added else empty_pages + 1
+        if empty_pages >= _EMPTY_USER_PAGE_LIMIT:
+            stop_reason = "empty_pages"
+            break
+
+        # Otherwise the same EOF rule as the tweet loop: only a non-advancing
+        # cursor ends it.
+        if next_cursor is None or next_cursor == cursor:
+            stop_reason = "feed_exhausted"
+            break
+        cursor = next_cursor
+
+    return UserResult(users=users, stop_reason=stop_reason, requests_made=read_client.requests_made)
+
+
+def fetch_social_graph(
+    read_client,
+    query_ids: dict,
+    features: dict,
+    operation: str,
+    identifier_kind: str,
+    identifier_value: str,
+    *,
+    limit: int | None = None,
+    max_requests: int | None = None,
+    wait_on_limit: bool = False,
+    max_wait: float | None = None,
+) -> UserResult:
+    """Who follows / is followed by a user, or who retweeted a tweet.
+
+    `Following` and `Retweeters` need no transaction id; `Followers` does and
+    gets one automatically from `client.ReadClient`. `Favoriters` (likers) is
+    deliberately absent: probed live 2026-07-20, X no longer exposes a likers
+    list at all -- /likes redirects to the tweet, and the op name appears in
+    none of its 685 JS chunks. Quoters are reachable through `search` with a
+    `quoted_tweet_id:` query, which is what X's own /quotes tab does.
+    """
+    if operation == "Retweeters":
+        target_id = identifier_value
+    else:
+        target_id = resolve_user_id(
+            read_client, query_ids, features, identifier_kind, identifier_value
+        )
+    query_id = query_ids.get(operation, queryids.DEFAULT_QUERY_IDS[operation])
+
+    def build_variables(cursor: str | None) -> dict:
+        return gql.social_graph_variables(target_id, operation=operation, cursor=cursor)
+
+    return paginate_users(
+        read_client,
+        operation,
+        query_id,
+        features,
+        build_variables,
+        limit=limit,
+        max_requests=max_requests,
+        wait_on_limit=wait_on_limit,
+        max_wait=max_wait,
+    )

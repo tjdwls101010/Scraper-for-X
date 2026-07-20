@@ -196,3 +196,27 @@ def user_by_screen_name_variables(screen_name: str) -> dict:
         "screen_name": screen_name,
         "withSafetyModeUserFields": True,
     }
+
+
+def social_graph_variables(
+    target_id: str,
+    *,
+    operation: str,
+    cursor: str | None = None,
+    count: int = 20,
+) -> dict:
+    """Build `variables` for the User-returning ops.
+
+    LIVE-CAPTURED 2026-07-20. The follow ops key off `userId`, `Retweeters`
+    off `tweetId` -- the only shape difference between them, which is why one
+    builder covers all three rather than three near-identical ones.
+    """
+    key = "tweetId" if operation == "Retweeters" else "userId"
+    variables: dict = {
+        key: target_id,
+        "count": count,
+        "includePromotedContent": operation == "Retweeters",
+    }
+    if cursor is not None:
+        variables["cursor"] = cursor
+    return variables

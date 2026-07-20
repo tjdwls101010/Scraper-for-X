@@ -52,6 +52,16 @@ class EnvelopeParseError(ScraperForXError):
     """
 
 
+# Per-op path for the social-graph ops, which return Users rather than Tweets.
+# LIVE-CAPTURED 2026-07-20. Following/Followers reuse the profile-timeline root;
+# Retweeters has its own.
+USER_ENVELOPE_ROOTS: dict[str, tuple[str, ...]] = {
+    "Following": ("data", "user", "result", "timeline", "timeline", "instructions"),
+    "Followers": ("data", "user", "result", "timeline", "timeline", "instructions"),
+    "Retweeters": ("data", "retweeters_timeline", "timeline", "instructions"),
+}
+
+
 def _get_path(d: dict, path: tuple[str, ...]) -> object | None:
     """Safe nested-dict walk. Returns None if any hop is missing or not a dict --
     never raises.
@@ -130,3 +140,57 @@ def walk_instructions(response: dict, operation: str) -> tuple[list[tuple[dict, 
                     raw_tweets.append((result, True))
 
     return raw_tweets, bottom_cursor
+
+
+def walk_user_instructions(response: dict, operation: str) -> tuple[list[dict], str | None]:
+    """Parse one social-graph response body into raw user dicts + next cursor.
+
+    The Tweet-returning ops and the User-returning ops share an envelope
+    *shape* -- ``TimelineAddEntries``, a Bottom cursor, per-entry
+    ``itemContent`` -- but not the entry contents: here each entry is
+    ``user-<id>`` carrying ``content.itemContent.user_results.result``, which
+    ``model.build_user`` reads unchanged.
+
+    Kept as a sibling of ``walk_instructions`` rather than a flag on it: the
+    two return different types, and a shared function that returns "either
+    tweets or users" would push that branch onto every caller.
+    """
+    root_path = USER_ENVELOPE_ROOTS[operation]
+    instructions = _get_path(response, root_path)
+    if not isinstance(instructions, list):
+        raise EnvelopeParseError(
+            f"could not locate instructions[] for operation {operation!r} at path {root_path!r}"
+        )
+
+    raw_users: list[dict] = []
+    bottom_cursor: str | None = None
+
+    for instruction in instructions:
+        if not isinstance(instruction, dict) or instruction.get("type") != "TimelineAddEntries":
+            continue
+        entries = instruction.get("entries")
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            entry_id = entry.get("entryId")
+            content = entry.get("content")
+            if not isinstance(content, dict):
+                continue
+
+            if isinstance(entry_id, str) and entry_id.startswith("user-"):
+                result = _get_path(entry, ("content", "itemContent", "user_results", "result"))
+                if isinstance(result, dict):
+                    raw_users.append(result)
+                continue
+
+            if (
+                content.get("entryType") == "TimelineTimelineCursor"
+                and content.get("cursorType") == "Bottom"
+            ):
+                value = content.get("value")
+                if isinstance(value, str):
+                    bottom_cursor = value
+
+    return raw_users, bottom_cursor

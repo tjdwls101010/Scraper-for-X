@@ -71,8 +71,14 @@ def browser_profile_dir(profile_dir: Path) -> Path:
 def query_ids_for(credential: auth.SessionCredential) -> tuple[dict, dict]:
     """The credential's own harvested query-ids/features, falling back to the
     shipped defaults if this session was never harvested/re-anchored (plan §8).
+
+    Merged **per op**, not all-or-nothing: a session harvested before a new op
+    existed carries a map that simply lacks it, and returning that map bare
+    would make the op unresolvable for every caller. Harvested values still win
+    -- they are live, the defaults are only a fallback (§8, §12).
     """
-    query_ids = credential.query_ids or dict(queryids.DEFAULT_QUERY_IDS)
+    query_ids = dict(queryids.DEFAULT_QUERY_IDS)
+    query_ids.update(credential.query_ids or {})
     features = credential.features or dict(gql.DEFAULT_FEATURES)
     return query_ids, features
 

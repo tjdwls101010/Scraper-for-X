@@ -280,6 +280,36 @@ def build_parser() -> argparse.ArgumentParser:
     search_p.add_argument("--until", type=_parse_iso_date, default=None)
     _add_common_fetch_args(search_p)
 
+    # Social graph. These emit User objects, not Tweets -- see `scrape-x schema`.
+    for name, help_text, target_help in (
+        ("following", "Accounts a user follows.", "@handle, username, numeric id, or profile URL."),
+        (
+            "followers",
+            "Accounts following a user. Needs a generated x-client-transaction-id "
+            "(reverse-engineered — may break when X changes it).",
+            "@handle, username, numeric id, or profile URL.",
+        ),
+        ("retweeters", "Accounts that retweeted a tweet.", "Tweet URL or numeric tweet id."),
+    ):
+        graph_p = subparsers.add_parser(name, help=help_text, description=help_text)
+        graph_p.add_argument("identifier", help=target_help)
+        graph_p.add_argument(
+            "--limit",
+            type=int,
+            default=None,
+            help="Stop after this many accounts (default: unbounded).",
+        )
+        if name != "retweeters":
+            graph_p.add_argument(
+                "--by",
+                choices=["screen_name", "id"],
+                default=None,
+                help=(
+                    "How to read an all-digit identifier: numeric user id (default) or screen_name."
+                ),
+            )
+        _add_common_fetch_args(graph_p)
+
     tweet_p = subparsers.add_parser("tweet", help="One tweet plus its reply/conversation thread.")
     tweet_p.add_argument("identifier", help="Tweet URL or numeric tweet id.")
     tweet_p.add_argument(
@@ -645,6 +675,87 @@ def _cmd_feed(args: argparse.Namespace) -> int:
     return _finish(result, "home", args)
 
 
+#: CLI name -> X operation, for the three User-returning commands. `likers` is
+#: absent on purpose: probed live 2026-07-20, X no longer exposes a likers list
+#: (/likes redirects to the tweet, and the op appears in none of its 685 JS
+#: chunks). For quoters, use: scrape-x search "quoted_tweet_id:<id>".
+_GRAPH_OPERATIONS = {
+    "following": "Following",
+    "followers": "Followers",
+    "retweeters": "Retweeters",
+}
+
+
+def _write_users(users: list, path: Path, fmt: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if fmt == "ndjson":
+        with path.open("w", encoding="utf-8") as fh:
+            for user in users:
+                fh.write(json.dumps(user.to_dict(), ensure_ascii=False))
+                fh.write("\n")
+    else:
+        with path.open("w", encoding="utf-8") as fh:
+            json.dump([u.to_dict() for u in users], fh, ensure_ascii=False, indent=2)
+
+
+def _cmd_social_graph(args: argparse.Namespace) -> int:
+    operation = _GRAPH_OPERATIONS[args.command]
+    try:
+        if operation == "Retweeters":
+            kind, value = "id", auth.normalize_tweet_identifier(args.identifier)
+        else:
+            kind, value = auth.normalize_identifier(args.identifier, by=args.by)
+    except InvalidIdentifierError as exc:
+        print(f"invalid identifier: {exc}", file=sys.stderr)
+        return 1
+
+    loaded = _load_read_client(args)
+    if isinstance(loaded, int):
+        return loaded
+    read_client, query_ids, features = loaded
+
+    try:
+        result = retrieve.fetch_social_graph(
+            read_client,
+            query_ids,
+            features,
+            operation,
+            kind,
+            value,
+            limit=args.limit,
+            wait_on_limit=args.wait_on_limit,
+            max_wait=args.max_wait,
+        )
+    except Exception as exc:  # noqa: BLE001 - dispatched by type below
+        exit_code = _handle_common_errors(exc, args)
+        if exit_code != -1:
+            return exit_code
+        if args.verbose:
+            print(redact.redact_raw_text(f"unexpected error: {exc}"), file=sys.stderr)
+        else:
+            print(
+                f"unexpected error: {type(exc).__name__} (rerun with -v for details)",
+                file=sys.stderr,
+            )
+        return 1
+    finally:
+        read_client.close()
+
+    output_path = (
+        Path(args.output)
+        if args.output
+        else _default_output_path(f"{args.command}-{args.identifier}", args.format)
+    )
+    _write_users(result.users, output_path, args.format)
+
+    exit_code = 3 if result.stop_reason == "rate_limited" else 0
+    print(
+        f"{len(result.users)} accounts, stop reason: {result.stop_reason}. Saved to {output_path}",
+        file=sys.stderr,
+    )
+    return exit_code
+
+
 def _cmd_search(args: argparse.Namespace) -> int:
     loaded = _load_read_client(args)
     if isinstance(loaded, int):
@@ -740,6 +851,9 @@ _HANDLERS = {
     "fetch": _cmd_fetch,
     "feed": _cmd_feed,
     "search": _cmd_search,
+    "following": _cmd_social_graph,
+    "followers": _cmd_social_graph,
+    "retweeters": _cmd_social_graph,
     "tweet": _cmd_tweet,
 }
 

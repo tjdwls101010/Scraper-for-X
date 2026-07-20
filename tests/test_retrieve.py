@@ -443,3 +443,105 @@ def test_from_observed_body_never_reports_soft_locked():
 
 def test_browser_observed_is_a_declared_stop_reason():
     assert "browser_observed" in retrieve.STOP_REASONS
+
+
+def _user_entry(rest_id: str, screen_name: str) -> dict:
+    return {
+        "entryId": f"user-{rest_id}",
+        "content": {
+            "itemContent": {
+                "user_results": {
+                    "result": {
+                        "rest_id": rest_id,
+                        "core": {"screen_name": screen_name},
+                        "legacy": {},
+                    }
+                }
+            }
+        },
+    }
+
+
+def _user_page(users: list[tuple[str, str]], cursor: str | None) -> dict:
+    entries = [_user_entry(uid, name) for uid, name in users]
+    if cursor is not None:
+        entries.append(
+            {
+                "entryId": "cursor-bottom",
+                "content": {
+                    "entryType": "TimelineTimelineCursor",
+                    "cursorType": "Bottom",
+                    "value": cursor,
+                },
+            }
+        )
+    return {
+        "data": {
+            "user": {
+                "result": {
+                    "timeline": {
+                        "timeline": {
+                            "instructions": [{"type": "TimelineAddEntries", "entries": entries}]
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+def test_paginate_users_walks_pages_and_dedups():
+    client = FakeReadClient(
+        [
+            _user_page([("1", "a"), ("2", "b")], "C1"),
+            _user_page([("2", "b"), ("3", "c")], None),
+        ]
+    )
+    result = retrieve.paginate_users(
+        client, "Following", "qid", {}, lambda cursor: {"cursor": cursor}
+    )
+    assert [u.id for u in result.users] == ["1", "2", "3"]
+    assert result.stop_reason == "feed_exhausted"
+
+
+def test_paginate_users_respects_limit():
+    client = FakeReadClient([_user_page([(str(i), f"u{i}") for i in range(1, 6)], "C1")])
+    result = retrieve.paginate_users(
+        client, "Following", "qid", {}, lambda cursor: {"cursor": cursor}, limit=2
+    )
+    assert [u.id for u in result.users] == ["1", "2"]
+    assert result.stop_reason == "limit_reached"
+
+
+def test_paginate_users_stops_after_consecutive_empty_pages():
+    """LIVE-OBSERVED 2026-07-20: @X's Following returns one account and then
+    cursor-only pages forever, each with a NEW cursor. Without this stop the run
+    burns the whole 500-request budget (~250s) for one account."""
+    pages = [_user_page([("1", "a")], "C1")]
+    pages += [_user_page([], f"C{i}") for i in range(2, 8)]
+    client = FakeReadClient(pages)
+    result = retrieve.paginate_users(
+        client, "Following", "qid", {}, lambda cursor: {"cursor": cursor}
+    )
+    assert [u.id for u in result.users] == ["1"]
+    assert result.stop_reason == "empty_pages"
+    # 1 page with the account + the empty-page limit, then it gives up.
+    assert client.requests_made == 1 + retrieve._EMPTY_USER_PAGE_LIMIT
+
+
+def test_empty_pages_is_not_reported_as_feed_exhausted():
+    """ "We gave up" and "we reached the end" are different facts; reporting the
+    first as the second would quietly overstate completeness."""
+    assert "empty_pages" in retrieve.STOP_REASONS
+
+
+def test_a_page_of_only_duplicates_counts_as_empty():
+    """Dedup can empty a page that was not empty on the wire -- that must still
+    advance the give-up counter, or a repeating page loops forever."""
+    pages = [_user_page([("1", "a")], f"C{i}") for i in range(1, 8)]
+    client = FakeReadClient(pages)
+    result = retrieve.paginate_users(
+        client, "Following", "qid", {}, lambda cursor: {"cursor": cursor}
+    )
+    assert [u.id for u in result.users] == ["1"]
+    assert result.stop_reason == "empty_pages"

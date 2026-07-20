@@ -45,6 +45,10 @@ DEFAULT_QUERY_IDS: dict[str, str] = {
     "TweetDetail": "rZA6K31W4E90vZKBmxXV3g",
     "Following": "PEIBUtChvR2i_NZCxbK3fA",
     "Followers": "18SNsfvwgu2CYIweeUVHAw",
+    # Not in main.js -- it lives in a lazily-loaded chunk, so this one had to be
+    # captured by watching /status/<id>/retweets in a browser (2026-07-20).
+    # `reanchor_via_main_js` cannot refresh it; a browser login can.
+    "Retweeters": "eio_KeZrPr83caqxWGNtiw",
 }
 
 
