@@ -54,7 +54,7 @@ scrape-x fetch nasa --limit 50
 
 † Needs a generated `x-client-transaction-id` — see below.
 
-All read commands share `--format json|ndjson`, `--output PATH`, `--profile NAME`, `--profile-dir PATH`, `--wait-on-limit`, `--max-wait`, `--raw` (+ `--no-redact`), and `-v/--verbose`. See the [CLI Reference](wiki/CLI-Reference.md) for every flag and exit code — or just run `scrape-x catalog` for the same thing as JSON.
+All read commands share `--format json|ndjson`, `--output PATH`, `--profile NAME`, `--profile-dir PATH`, `--wait-on-limit`, `--max-wait`, `--raw` (+ `--no-redact`), and `-v/--verbose`. See the [CLI Reference](docs/wiki/CLI-Reference.md) for every flag and exit code — or just run `scrape-x catalog` for the same thing as JSON.
 
 ### The transaction-id wall, and how this package gets past it
 
@@ -93,17 +93,17 @@ with XScraper(profile="default") as x:
 
 ## Documentation
 
-This README covers the essentials. For everything else, see the **[wiki](wiki/README.md)**:
+This README covers the essentials. For everything else, see the **[wiki](docs/wiki/README.md)**:
 
-- [Installation](wiki/Installation.md)
-- [Quick Start](wiki/Quick-Start.md)
-- [CLI Reference](wiki/CLI-Reference.md) — every flag, every exit code
-- [Python API Reference](wiki/Python-API-Reference.md)
-- [Configuration](wiki/Configuration.md) — profiles, environment variables
-- [Output Schema](wiki/Output-Schema.md) — every `Tweet`/`User`/`Media` field
-- [Security and Privacy](wiki/Security-and-Privacy.md) — the full threat model behind [DISCLAIMER.md](DISCLAIMER.md)
-- [FAQ and Troubleshooting](wiki/FAQ-and-Troubleshooting.md)
-- [Contributing](wiki/Contributing.md)
+- [Installation](docs/wiki/Installation.md)
+- [Quick Start](docs/wiki/Quick-Start.md)
+- [CLI Reference](docs/wiki/CLI-Reference.md) — every flag, every exit code
+- [Python API Reference](docs/wiki/Python-API-Reference.md)
+- [Configuration](docs/wiki/Configuration.md) — profiles, environment variables
+- [Output Schema](docs/wiki/Output-Schema.md) — every `Tweet`/`User`/`Media` field
+- [Security and Privacy](docs/wiki/Security-and-Privacy.md) — the full threat model behind [DISCLAIMER.md](DISCLAIMER.md)
+- [FAQ and Troubleshooting](docs/wiki/FAQ-and-Troubleshooting.md)
+- [Contributing](docs/wiki/Contributing.md)
 
 ## License
 
