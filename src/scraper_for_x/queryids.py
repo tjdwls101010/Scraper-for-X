@@ -26,24 +26,25 @@ import httpx
 
 from .gql import DEFAULT_FEATURES
 
-# Live query-ids captured 2026-07-05 against a logged-in X session (probe-
-# verified real). `TweetDetail` and `UserTweetsAndReplies` were NOT directly
-# observed in that probe -- see the comments below; they are best-guess
-# placeholders and a known gap to close during implementation testing.
+# Live query-ids re-captured 2026-07-20 against a logged-in X session. Every
+# id below was observed in a real browser XHR or x.com's main.js bundle AND
+# fired over httpx in the same session, so none is a guess any more -- the
+# 2026-07-05 `TweetDetail`/`UserTweetsAndReplies` placeholders are gone.
+#
+# "Verified" here means "X routed the request", NOT "the op is reachable":
+# `SearchTimeline`, `UserTweetsAndReplies` and `Followers` answer 404 to a
+# correct id without an `x-client-transaction-id` (see transaction.py). Ids
+# still rotate every 2-4 weeks -- these remain a fallback, never the source of
+# truth (§8, §12).
 DEFAULT_QUERY_IDS: dict[str, str] = {
-    "UserTweets": "hr4gzZONlq23okjU8fIe_A",
+    "UserTweets": "6r5OLCC_wFH4CpRyXKuAmQ",
     "HomeTimeline": "gKia-nBM9kwuDEfSDeWMfQ",
     "UserByScreenName": "2qvSHpkWTMS9i0zJAwDNiA",
-    "SearchTimeline": "Bcw3RzK-PatNAmbnw54hFw",
-    # PLACEHOLDER -- not probe-verified. Guessed by copying the UserTweets id;
-    # X often (not always) reuses a sibling op's id at rotation time, but this
-    # has NOT been confirmed live. Verify against a real capture (§12) before
-    # relying on it -- a wrong id here degrades to an empty parse (exit 4).
-    "UserTweetsAndReplies": "hr4gzZONlq23okjU8fIe_A",
-    # PLACEHOLDER -- not probe-verified. No live TweetDetail capture was taken
-    # during the 2026-07-05 probe; this value is an unverified guess and MUST
-    # be replaced with a real captured id during implementation testing.
-    "TweetDetail": "xOhkmRac04_n8am8LZaObg",
+    "SearchTimeline": "hz_94eVAtrtQo_vO3my7Rw",
+    "UserTweetsAndReplies": "klja8a2iJX_3to5RdfVlgw",
+    "TweetDetail": "rZA6K31W4E90vZKBmxXV3g",
+    "Following": "PEIBUtChvR2i_NZCxbK3fA",
+    "Followers": "18SNsfvwgu2CYIweeUVHAw",
 }
 
 

@@ -100,3 +100,62 @@ The naive `ondemand.s.<hash>a.js` URL regex missed (the real URL is built from t
 ## 7. Durability
 
 Everything here is a 2026-07-20 snapshot. Query-ids rotate every 2–4 weeks; the txid algorithm can change on any X client deploy. Phase 0 of implementation **must** re-capture query-ids and re-run the txid-wall probe before writing feature code. Treat every id/shape above as "last known good," never as a constant.
+
+---
+
+## 8. Phase-0 implementation-session addendum (2026-07-20, same day)
+
+Re-verification at the start of the implementation session. The txid-wall table
+in §2 **reproduced exactly** (`UserByScreenName`/`UserTweets`/`TweetDetail`/
+`HomeTimeline` 200; `SearchTimeline`/`UserTweetsAndReplies` 404), and the
+`recon` session from the planning session was still valid — no re-login needed.
+
+### 8.1 Social-graph ops — probed for the first time
+
+| Op | query-id (2026-07-20) | source | HTTP without txid | verdict |
+|---|---|---|---|---|
+| `Following` | `PEIBUtChvR2i_NZCxbK3fA` | main.js bundle | **200** | ✅ **ungated** |
+| `Followers` | `18SNsfvwgu2CYIweeUVHAw` | main.js bundle | **404** | ❌ **txid-gated** |
+| `Favoriters` (likers) | — | **not in main.js** | — | ❓ unresolved |
+| `Retweeters` | — | **not in main.js** | — | ❓ unresolved |
+
+**The `Followers`/`Following` asymmetry is real, not a variables bug.** Three
+different variable shapes (Following's exact dict, `+withGrokTranslatedBio`,
+and a minimal `{userId,count}`) all 404'd identically, while `Following` 200s
+with the first of those and survives a repeat call. So `Followers` joins
+`SearchTimeline`/`UserTweetsAndReplies` behind the txid wall — **Phase 4 now
+partly depends on Phase 2**, which the plan assumed it might not.
+
+`Following`'s envelope is the *same* path the profile timelines use —
+`data.user.result.timeline.timeline.instructions` — with `user-<id>` entryIds,
+`content.itemContent.user_results.result`, `itemType: TimelineUser`, and the
+ordinary `cursorType: Bottom` cursor. The existing `model.build_user` reads
+that node **unchanged** (`core.screen_name`, `legacy.followers_count`,
+`rest_id`, `is_blue_verified` all present), so Phase 4 needs only
+`walk_user_instructions`, not new model code.
+
+### 8.2 `reanchor_via_main_js` works — the regex is no longer a guess
+
+`queryids.py` shipped its bundle regex marked "NEEDS VERIFICATION." It
+**resolved 100 ops** from the live bundle today, including ops never harvested
+in a browser. Browser-free query-id refresh (`doctor --refresh`) is real.
+
+Its limit: `Favoriters`/`Retweeters` are **absent** from `main.js` — they live
+in a lazily-loaded webpack chunk. Getting their ids needs either a browser
+capture of `/status/<id>/likes` + `/retweets`, or extending the re-anchor to
+resolve lazy chunks. Deferred to Phase 4.
+
+### 8.3 Home feed carries ads
+
+A live page: 28 `tweet-*` entries, **7 `promoted-*` entries**, 1 Top + 1 Bottom
+cursor, all under one `TimelineAddEntries`. The existing entryId prefix check
+drops the promoted ones for free; a test now pins that.
+
+### 8.4 Scripted browser harvest hung
+
+`scratch/recon_graph_harvest.py` (headed stealth Chrome over the persistent
+`recon` profile) printed its first nav target and then hung ~25 min without
+advancing, and was killed. `StealthySession.fetch(page_action=...)` against
+x.com — which never goes network-idle — is the suspect. `recon_login.py`'s
+cookie-polling shape avoids this; any Phase-4 browser harvest should be built
+on that pattern rather than on a plain nav loop.
