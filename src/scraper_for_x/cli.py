@@ -9,9 +9,11 @@ import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
 
-from . import __version__, auth, client, redact, retrieve, session
+from . import __version__, auth, client, observe, redact, retrieve, session
 from .config import DEFAULT_PROFILE_NAME, default_output_dir
 from .errors import (
+    BrowserFallbackError,
+    GatedOpRejectedError,
     InvalidCookieError,
     InvalidIdentifierError,
     LoginRequiredError,
@@ -507,6 +509,40 @@ def _handle_common_errors(exc: Exception, args: argparse.Namespace) -> int:
     return -1
 
 
+def _try_browser_fallback(
+    operation: str, target: str, args: argparse.Namespace
+) -> retrieve.RetrieveResult | None:
+    """Recover a gated op via the browser after the generated txid was refused.
+
+    Returns ``None`` if the fallback itself is unavailable, so the caller can
+    report the original failure rather than a confusing second one.
+    """
+    print(
+        f"{operation}: X refused the generated x-client-transaction-id "
+        "(the generator has likely rotted). Falling back to the browser — "
+        "this returns only the FIRST page.",
+        file=sys.stderr,
+    )
+    try:
+        body = observe.observe(
+            operation,
+            target,
+            profile=args.profile,
+            profile_dir_override=args.profile_dir,
+        )
+    except BrowserFallbackError as exc:
+        print(f"browser fallback unavailable: {exc}", file=sys.stderr)
+        return None
+    return retrieve.from_observed_body(
+        body,
+        operation,
+        limit=args.limit,
+        since=_since_datetime(args.since),
+        until=_until_datetime(args.until),
+        raw=args.raw,
+    )
+
+
 def _load_read_client(args: argparse.Namespace) -> tuple[client.ReadClient, dict, dict] | int:
     """Loads the persisted session and builds a `ReadClient`, or returns the
     exit code to use if that fails."""
@@ -547,6 +583,12 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
             max_wait=args.max_wait,
             raw=args.raw,
         )
+    except GatedOpRejectedError:
+        # Only --replies can land here; plain `fetch` is not a gated op.
+        fallback = _try_browser_fallback("UserTweetsAndReplies", value, args)
+        if fallback is None:
+            return 4
+        result = fallback
     except Exception as exc:  # noqa: BLE001 - dispatched by type below
         exit_code = _handle_common_errors(exc, args)
         if exit_code != -1:
@@ -625,6 +667,11 @@ def _cmd_search(args: argparse.Namespace) -> int:
             max_wait=args.max_wait,
             raw=args.raw,
         )
+    except GatedOpRejectedError:
+        fallback = _try_browser_fallback("SearchTimeline", args.query, args)
+        if fallback is None:
+            return 4
+        result = fallback
     except Exception as exc:  # noqa: BLE001 - dispatched by type below
         exit_code = _handle_common_errors(exc, args)
         if exit_code != -1:

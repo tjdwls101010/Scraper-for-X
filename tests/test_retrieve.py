@@ -413,3 +413,33 @@ def test_fetch_home_respects_limit():
     result = retrieve.fetch_home(client, {"HomeTimeline": "QID"}, {}, limit=2)
     assert [t.id for t in result.tweets] == ["1", "2"]
     assert result.stop_reason == "limit_reached"
+
+
+def test_from_observed_body_builds_a_result_from_one_page():
+    """The browser fallback yields exactly one page, so the run reports
+    `browser_observed` -- not `feed_exhausted` (there IS more, we just cannot
+    reach it) and not `max_requests` (no budget was hit)."""
+    body = _search_page([_tweet_entry("1", DAY1), _tweet_entry("2", DAY1)], "CURSOR1")
+    result = retrieve.from_observed_body(body, "SearchTimeline")
+    assert [t.id for t in result.tweets] == ["1", "2"]
+    assert result.stop_reason == "browser_observed"
+
+
+def test_from_observed_body_still_honours_limit():
+    body = _search_page([_tweet_entry(str(i), DAY1) for i in range(1, 5)], "CURSOR1")
+    result = retrieve.from_observed_body(body, "SearchTimeline", limit=2)
+    assert [t.id for t in result.tweets] == ["1", "2"]
+    assert result.stop_reason == "limit_reached"
+
+
+def test_from_observed_body_never_reports_soft_locked():
+    """An empty page sends paginate into its soft-lock probe, which would
+    re-read this same body and could call the session dead. The browser just
+    captured a live response, so that verdict must not survive."""
+    result = retrieve.from_observed_body(_page([], None), "UserTweetsAndReplies")
+    assert result.tweets == []
+    assert result.stop_reason == "browser_observed"
+
+
+def test_browser_observed_is_a_declared_stop_reason():
+    assert "browser_observed" in retrieve.STOP_REASONS

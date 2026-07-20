@@ -27,6 +27,12 @@ STOP_REASONS = frozenset(
         "max_requests",
         "rate_limited",
         "soft_locked",
+        # Only reachable via the browser-observe fallback: a browser page-load
+        # fires its GraphQL op once, so the run necessarily stops after one
+        # page. Distinct from "feed_exhausted" (there IS more, we just can't
+        # reach it without the transaction id) and from "max_requests" (no
+        # budget was hit).
+        "browser_observed",
     }
 )
 
@@ -382,6 +388,61 @@ def iter_user_tweets(
         raw=raw,
         state=state,
     )
+
+
+class _SingleBodyClient:
+    """Replays one already-captured body through the normal pagination loop.
+
+    Lets the browser-observe fallback reuse `paginate`'s parsing, dedup,
+    since/until/limit filtering and pinned-tweet handling verbatim, instead of
+    growing a second copy of that logic that could drift from the real one.
+    """
+
+    def __init__(self, body: dict) -> None:
+        self._body = body
+        self.requests_made = 0
+
+    def get(self, query_id, operation, variables, features, field_toggles=None) -> dict:
+        self.requests_made += 1
+        return self._body
+
+    post = get
+
+
+def from_observed_body(
+    body: dict,
+    operation: str,
+    *,
+    limit: int | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    raw: bool = False,
+) -> RetrieveResult:
+    """Turn ONE browser-observed response body into a `RetrieveResult`.
+
+    The result carries `stop_reason="browser_observed"` unless a filter stopped
+    it first -- callers must surface that this is a single page, not a
+    completed run.
+    """
+    result = paginate(
+        _SingleBodyClient(body),
+        operation,
+        "",
+        {},
+        lambda cursor: {},
+        max_requests=1,
+        limit=limit,
+        since=since,
+        until=until,
+        raw=raw,
+    )
+    # "soft_locked" is included deliberately: an empty page sends `paginate`
+    # into its soft-lock probe, which re-reads this same body and can conclude
+    # the session is dead. It isn't -- the browser just captured a live
+    # response -- so that verdict must not survive.
+    if result.stop_reason in ("max_requests", "feed_exhausted", "soft_locked"):
+        result.stop_reason = "browser_observed"
+    return result
 
 
 def fetch_home(

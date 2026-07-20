@@ -145,6 +145,14 @@ class ReadClient:
         if response.status_code == 401:
             raise errors.SessionExpiredError()
         if response.status_code != 200:
+            if operation in transaction.GATED_OPS:
+                # A header WAS minted (generation failure raises earlier) and X
+                # still refused -- the generator has rotted. Typed separately so
+                # callers can fall back to browser-observe (plan §4).
+                raise errors.GatedOpRejectedError(
+                    f"{operation} rejected a generated x-client-transaction-id "
+                    f"(HTTP {response.status_code})"
+                )
             raise errors.ScraperForXError(
                 f"unexpected status {response.status_code} for {operation}"
             )

@@ -21,7 +21,9 @@ from . import retrieve as retrieve_module
 from . import session as session_module
 from .config import DEFAULT_PROFILE_NAME
 from .errors import (
+    BrowserFallbackError,
     FeatureNotImplementedError,
+    GatedOpRejectedError,
     InvalidCookieError,
     InvalidIdentifierError,
     LoginRequiredError,
@@ -58,6 +60,8 @@ __all__ = [
     "SessionClosedError",
     "EnvelopeParseError",
     "FeatureNotImplementedError",
+    "GatedOpRejectedError",
+    "BrowserFallbackError",
     "TransactionIdError",
 ]
 

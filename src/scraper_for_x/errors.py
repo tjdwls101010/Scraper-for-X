@@ -89,6 +89,26 @@ class TransactionIdError(ScraperForXError):
     """
 
 
+class GatedOpRejectedError(ScraperForXError):
+    """A transaction-id-gated op rejected the request despite a minted header.
+
+    This is the specific signal that the reverse-engineered generator has
+    rotted: the header was produced (a generation failure would have raised
+    :class:`TransactionIdError` first) and X still refused. It is the trigger
+    for the browser-observe fallback, not a reason to re-port the generator
+    on the spot.
+    """
+
+
+class BrowserFallbackError(ScraperForXError):
+    """The browser-observe fallback could not produce a response.
+
+    Covers the ``[browser]`` extra being absent, an op with no known page to
+    drive, and a page that loaded but never fired the operation (usually a
+    browser profile that is logged out even though the stored cookies are not).
+    """
+
+
 class FeatureNotImplementedError(ScraperForXError):
     """No shipped operation raises this any more; retained for compatibility.
 
