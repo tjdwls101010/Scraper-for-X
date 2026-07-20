@@ -271,6 +271,35 @@ class XScraper:
                 )
             yield tweet
 
+    def fetch_home(
+        self,
+        *,
+        limit: int | None = None,
+        since: str | date | None = None,
+        until: str | date | None = None,
+        wait_on_limit: bool = False,
+        max_wait: float | None = None,
+        raw: bool = False,
+    ) -> list[Tweet]:
+        """The logged-in account's home feed (plan §1).
+
+        Takes no identifier -- the feed belongs to the session itself.
+        """
+        self._require_entered()
+        result = retrieve_module.fetch_home(
+            self._read_client,
+            self._query_ids,
+            self._features,
+            limit=limit,
+            since=_parse_since(since),
+            until=_parse_until(until),
+            wait_on_limit=wait_on_limit,
+            max_wait=max_wait,
+            raw=raw,
+        )
+        self.last_result = result
+        return result.tweets
+
     def search(
         self,
         query: str,

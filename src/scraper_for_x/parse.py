@@ -26,6 +26,10 @@ ENVELOPE_ROOTS: dict[str, tuple[str, ...]] = {
         "instructions",
     ),
     "TweetDetail": ("data", "threaded_conversation_with_injections_v2", "instructions"),
+    # LIVE-CAPTURED 2026-07-20: the home feed nests one level deeper than the
+    # profile timelines, under `home.home_timeline_urt` rather than
+    # `user.result.timeline.timeline`.
+    "HomeTimeline": ("data", "home", "home_timeline_urt", "instructions"),
 }
 
 

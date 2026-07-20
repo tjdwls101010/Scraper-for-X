@@ -149,3 +149,34 @@ def test_thin_page_with_new_cursor_is_not_conflated_with_eof(load_fixture):
     raw_tweets, cursor = parse.walk_instructions(thin_page, "UserTweets")
     assert raw_tweets == []
     assert cursor == "CURSOR_STILL_ADVANCING"
+
+
+def test_home_timeline_envelope_root_and_cursor(load_fixture):
+    """The home feed nests one level deeper than the profile timelines
+    (`home.home_timeline_urt`), so it needs its own ENVELOPE_ROOTS entry --
+    without it `walk_instructions` raises rather than silently returning [].
+    """
+    body = load_fixture("home_timeline.json")
+    raw_tweets, cursor = parse.walk_instructions(body, "HomeTimeline")
+    assert {t["rest_id"] for t, _ in raw_tweets} == {"7001", "7002"}
+    assert cursor == "CURSOR_BOTTOM_HOME_PAGE1"
+
+
+def test_home_timeline_promoted_entries_are_excluded(load_fixture):
+    """LIVE-OBSERVED 2026-07-20: a real home feed page carried 7 `promoted-*`
+    ad entries alongside 28 real `tweet-*` ones. They are dropped for free by
+    the `tweet-`/`conversationthread-` entryId prefix check -- pinned here as a
+    contract so a future widening of that check can't start leaking ads into
+    the output.
+    """
+    body = load_fixture("home_timeline.json")
+    raw_tweets, _ = parse.walk_instructions(body, "HomeTimeline")
+    assert "7003" not in {t["rest_id"] for t, _ in raw_tweets}
+
+
+def test_home_timeline_module_entries_are_skipped(load_fixture):
+    """A `TimelineTimelineModule` (who-to-follow etc.) carries no
+    `tweet_results` and must not break the walk."""
+    body = load_fixture("home_timeline.json")
+    raw_tweets, _ = parse.walk_instructions(body, "HomeTimeline")
+    assert len(raw_tweets) == 2

@@ -77,7 +77,40 @@ class ReadClient:
             params["fieldToggles"] = json.dumps(field_toggles)
         response = self._client.get(url, params=params)
         self.requests_made += 1
+        return self._handle(response, operation)
 
+    def post(
+        self,
+        query_id: str,
+        operation: str,
+        variables: dict,
+        features: dict,
+        field_toggles: dict | None = None,
+    ) -> dict:
+        """Fire one GraphQL read as a POST and return the parsed JSON body.
+
+        Same contract as ``get()``, different wire shape: the payload travels
+        as a JSON body (with ``queryId`` repeated inside it) rather than as
+        query params. ``HomeTimeline`` is the op that needs this -- GET works
+        for it today (verified live 2026-07-20), but X's own web client sends
+        a POST, and matching the real client is the durable choice for an op
+        that is not currently walled.
+        """
+        if self.requests_made > 0:
+            time.sleep(self.min_pause)
+
+        url = gql.build_url(query_id, operation)
+        payload: dict = {"variables": variables, "features": features, "queryId": query_id}
+        if field_toggles is not None:
+            payload["fieldToggles"] = field_toggles
+        response = self._client.post(url, json=payload)
+        self.requests_made += 1
+        return self._handle(response, operation)
+
+    def _handle(self, response: httpx.Response, operation: str) -> dict:
+        """Shared post-request handling for ``get()``/``post()``: record the
+        rate-limit headers, map the failure statuses onto typed errors, and
+        catch X's 200-but-logged-out shape."""
         remaining = response.headers.get("x-rate-limit-remaining")
         self.last_rate_limit_remaining = int(remaining) if remaining is not None else None
         reset = response.headers.get("x-rate-limit-reset")

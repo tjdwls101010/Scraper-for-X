@@ -56,8 +56,17 @@ class FakeReadClient:
     def __init__(self, pages: list[dict | Exception]):
         self._pages = list(pages)
         self.requests_made = 0
+        self.methods_used: list[str] = []
 
     def get(self, query_id, operation, variables, features, field_toggles=None):
+        self.methods_used.append("GET")
+        return self._next_page()
+
+    def post(self, query_id, operation, variables, features, field_toggles=None):
+        self.methods_used.append("POST")
+        return self._next_page()
+
+    def _next_page(self):
         if not self._pages:
             raise AssertionError("FakeReadClient exhausted -- test scripted too few pages")
         self.requests_made += 1
@@ -321,3 +330,40 @@ def test_fetch_user_tweets_without_replies_is_unaffected():
     client = FakeReadClient([page])
     result = retrieve.fetch_user_tweets(client, {}, {}, "id", "123", replies=False)
     assert [t.id for t in result.tweets] == ["1"]
+
+
+def _home_page(tweets: list[dict], cursor: str | None) -> dict:
+    """Same entries as `_page`, wrapped in the home feed's deeper envelope."""
+    inner = _page(tweets, cursor)
+    instructions = inner["data"]["user"]["result"]["timeline"]["timeline"]["instructions"]
+    return {"data": {"home": {"home_timeline_urt": {"instructions": instructions}}}}
+
+
+def test_fetch_home_paginates_and_returns_tweets():
+    client = FakeReadClient(
+        [
+            _home_page([_tweet_entry("1", DAY1), _tweet_entry("2", DAY1)], "CURSOR1"),
+            _home_page([_tweet_entry("3", DAY1)], None),
+        ]
+    )
+    result = retrieve.fetch_home(client, {"HomeTimeline": "QID"}, {})
+    assert [t.id for t in result.tweets] == ["1", "2", "3"]
+    assert result.stop_reason == "feed_exhausted"
+
+
+def test_fetch_home_uses_post_not_get():
+    """X's own client POSTs HomeTimeline. GET works today too, but matching the
+    real client is the durable choice for an op that is not currently walled --
+    pinned here so the wire shape can't silently regress to GET."""
+    client = FakeReadClient([_home_page([_tweet_entry("1", DAY1)], None)])
+    retrieve.fetch_home(client, {"HomeTimeline": "QID"}, {})
+    assert client.methods_used == ["POST"]
+
+
+def test_fetch_home_respects_limit():
+    client = FakeReadClient(
+        [_home_page([_tweet_entry(str(i), DAY1) for i in range(1, 6)], "CURSOR1")]
+    )
+    result = retrieve.fetch_home(client, {"HomeTimeline": "QID"}, {}, limit=2)
+    assert [t.id for t in result.tweets] == ["1", "2"]
+    assert result.stop_reason == "limit_reached"

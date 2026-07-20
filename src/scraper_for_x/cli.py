@@ -238,6 +238,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_common_fetch_args(fetch_p)
 
+    feed_p = subparsers.add_parser(
+        "feed",
+        help="The logged-in account's home feed (takes no target).",
+    )
+    feed_p.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Stop after this many tweets (default: unbounded).",
+    )
+    feed_p.add_argument(
+        "--since",
+        type=_parse_iso_date,
+        default=None,
+        help=(
+            "Keep tweets on/after this date YYYY-MM-DD; best-effort — if the run stops on "
+            "--limit or the request budget before reaching it, exit 7."
+        ),
+    )
+    feed_p.add_argument(
+        "--until",
+        type=_parse_iso_date,
+        default=None,
+        help="Keep tweets on/before this date YYYY-MM-DD.",
+    )
+    _add_common_fetch_args(feed_p)
+
     search_p = subparsers.add_parser(
         "search",
         help=_SEARCH_NOT_IMPLEMENTED,
@@ -535,6 +562,44 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
     return _finish(result, args.identifier, args)
 
 
+def _cmd_feed(args: argparse.Namespace) -> int:
+    loaded = _load_read_client(args)
+    if isinstance(loaded, int):
+        return loaded
+    read_client, query_ids, features = loaded
+
+    try:
+        result = retrieve.fetch_home(
+            read_client,
+            query_ids,
+            features,
+            limit=args.limit,
+            since=_since_datetime(args.since),
+            until=_until_datetime(args.until),
+            wait_on_limit=args.wait_on_limit,
+            max_wait=args.max_wait,
+            raw=args.raw,
+        )
+    except Exception as exc:  # noqa: BLE001 - dispatched by type below
+        exit_code = _handle_common_errors(exc, args)
+        if exit_code != -1:
+            return exit_code
+        if args.verbose:
+            print(redact.redact_raw_text(f"unexpected error: {exc}"), file=sys.stderr)
+        else:
+            print(
+                f"unexpected error: {type(exc).__name__} (rerun with -v for details)",
+                file=sys.stderr,
+            )
+        return 1
+    finally:
+        read_client.close()
+
+    # "home" stands in for the identifier the other commands name their output
+    # file after -- the feed's target is the session itself, not an argument.
+    return _finish(result, "home", args)
+
+
 def _cmd_search(args: argparse.Namespace) -> int:
     # NOT IMPLEMENTED (plan §10a): SearchTimeline needs a fresh, single-use
     # x-client-transaction-id per request that this harvest-then-replay design
@@ -595,6 +660,7 @@ _HANDLERS = {
     "doctor": _cmd_doctor,
     "schema": _cmd_schema,
     "fetch": _cmd_fetch,
+    "feed": _cmd_feed,
     "search": _cmd_search,
     "tweet": _cmd_tweet,
 }

@@ -79,6 +79,7 @@ def paginate_iter(
     *,
     field_toggles: dict | None = None,
     query_ids: dict | None = None,
+    method: str = "GET",
     limit: int | None = None,
     since: datetime | None = None,
     until: datetime | None = None,
@@ -95,7 +96,9 @@ def paginate_iter(
     ``build_variables(cursor)`` builds the ``variables`` dict for the next
     request (``cursor=None`` for the first page). ``field_toggles`` is a
     third, op-specific query param some ops require (plan §8 -- found live;
-    omitted entirely, not just empty, for ops that don't use it). Raises
+    omitted entirely, not just empty, for ops that don't use it). ``method``
+    selects the wire shape: "GET" for every op X's client reads with query
+    params, "POST" for ``HomeTimeline``, which X's own client posts. Raises
     ``parse.EnvelopeParseError`` un-caught if the response envelope can't be
     located at all (plan §11: that is a structural failure, not an empty
     result, and callers map it to exit 4). ``state`` is filled in as a side
@@ -106,6 +109,7 @@ def paginate_iter(
     cursor: str | None = None
     budget = _DEFAULT_MAX_REQUESTS if max_requests is None else max_requests
     captured_at = datetime.now(UTC)
+    send = read_client.post if method == "POST" else read_client.get
 
     while True:
         if read_client.requests_made >= budget:
@@ -113,9 +117,7 @@ def paginate_iter(
             break
 
         try:
-            body = read_client.get(
-                query_id, operation, build_variables(cursor), features, field_toggles
-            )
+            body = send(query_id, operation, build_variables(cursor), features, field_toggles)
         except errors.RateLimitedError as exc:
             if wait_on_limit and exc.reset_at is not None:
                 wait_seconds = max(0.0, exc.reset_at - time.time())
@@ -202,6 +204,7 @@ def paginate(
     *,
     field_toggles: dict | None = None,
     query_ids: dict | None = None,
+    method: str = "GET",
     limit: int | None = None,
     since: datetime | None = None,
     until: datetime | None = None,
@@ -224,6 +227,7 @@ def paginate(
             build_variables,
             field_toggles=field_toggles,
             query_ids=query_ids,
+            method=method,
             limit=limit,
             since=since,
             until=until,
@@ -383,6 +387,53 @@ def iter_user_tweets(
         max_wait=max_wait,
         raw=raw,
         state=state,
+    )
+
+
+def fetch_home(
+    read_client,
+    query_ids: dict,
+    features: dict,
+    *,
+    limit: int | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    max_requests: int | None = None,
+    wait_on_limit: bool = False,
+    max_wait: float | None = None,
+    raw: bool = False,
+) -> RetrieveResult:
+    """The logged-in account's home feed (`HomeTimeline`).
+
+    Needs no `x-client-transaction-id` -- live-verified 2026-07-20 that the
+    home feed is NOT behind the wall that gates `SearchTimeline`/
+    `UserTweetsAndReplies`. Takes no target: the feed is a property of the
+    logged-in session itself, which is why this is the one read with no
+    identifier argument.
+
+    Sent as a POST to match X's own client (`client.ReadClient.post`).
+    """
+    operation = "HomeTimeline"
+    query_id = query_ids.get(operation, queryids.DEFAULT_QUERY_IDS[operation])
+
+    def build_variables(cursor: str | None) -> dict:
+        return gql.home_timeline_variables(cursor=cursor)
+
+    return paginate(
+        read_client,
+        operation,
+        query_id,
+        features,
+        build_variables,
+        query_ids=query_ids,
+        method="POST",
+        limit=limit,
+        since=since,
+        until=until,
+        max_requests=max_requests,
+        wait_on_limit=wait_on_limit,
+        max_wait=max_wait,
+        raw=raw,
     )
 
 

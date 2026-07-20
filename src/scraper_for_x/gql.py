@@ -170,6 +170,26 @@ def tweet_detail_variables(tweet_id: str, *, cursor: str | None = None) -> dict:
     return variables
 
 
+def home_timeline_variables(*, cursor: str | None = None, count: int = 20) -> dict:
+    """Build `variables` for `HomeTimeline` (the logged-in home feed).
+
+    LIVE-CAPTURED 2026-07-20: this exact dict returned 200 over plain httpx
+    (both GET and POST) with no `x-client-transaction-id`. `requestContext` is
+    "launch" on the first page; X's own client sends "ptr" (pull-to-refresh)
+    on later ones, but "launch" paginates fine and keeps this builder pure.
+    """
+    variables: dict = {
+        "count": count,
+        "includePromotedContent": True,
+        "latestControlAvailable": True,
+        "requestContext": "launch",
+        "withCommunity": True,
+    }
+    if cursor is not None:
+        variables["cursor"] = cursor
+    return variables
+
+
 def user_by_screen_name_variables(screen_name: str) -> dict:
     """Build `variables` for `UserByScreenName` (handle -> rest_id resolution)."""
     return {

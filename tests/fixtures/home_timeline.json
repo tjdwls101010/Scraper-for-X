@@ -1,0 +1,204 @@
+{
+  "data": {
+    "home": {
+      "home_timeline_urt": {
+        "instructions": [
+          {
+            "type": "TimelineAddEntries",
+            "entries": [
+              {
+                "entryId": "tweet-7001",
+                "content": {
+                  "entryType": "TimelineTimelineItem",
+                  "itemContent": {
+                    "itemType": "TimelineTweet",
+                    "tweet_results": {
+                      "result": {
+                        "__typename": "Tweet",
+                        "rest_id": "7001",
+                        "core": {
+                          "user_results": {
+                            "result": {
+                              "rest_id": "9101",
+                              "is_blue_verified": false,
+                              "core": {
+                                "name": "Synthetic Feed Author",
+                                "screen_name": "synth_feed_one",
+                                "created_at": "Mon Jan 01 00:00:00 +0000 2018"
+                              },
+                              "legacy": {
+                                "followers_count": 42,
+                                "friends_count": 7,
+                                "statuses_count": 120,
+                                "description": "synthetic feed bio",
+                                "url": null
+                              }
+                            }
+                          }
+                        },
+                        "legacy": {
+                          "full_text": "First synthetic home-feed tweet.",
+                          "created_at": "Sat Jul 18 09:00:00 +0000 2026",
+                          "favorite_count": 3,
+                          "retweet_count": 1,
+                          "reply_count": 0,
+                          "quote_count": 0,
+                          "bookmark_count": 0,
+                          "lang": "en",
+                          "conversation_id_str": "7001",
+                          "in_reply_to_status_id_str": null,
+                          "is_quote_status": false,
+                          "entities": {
+                            "urls": [],
+                            "hashtags": []
+                          }
+                        },
+                        "views": {
+                          "count": "10"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "entryId": "tweet-7002",
+                "content": {
+                  "entryType": "TimelineTimelineItem",
+                  "itemContent": {
+                    "itemType": "TimelineTweet",
+                    "tweet_results": {
+                      "result": {
+                        "__typename": "Tweet",
+                        "rest_id": "7002",
+                        "core": {
+                          "user_results": {
+                            "result": {
+                              "rest_id": "9102",
+                              "is_blue_verified": true,
+                              "core": {
+                                "name": "Second Synthetic Author",
+                                "screen_name": "synth_feed_two",
+                                "created_at": "Tue Feb 02 00:00:00 +0000 2019"
+                              },
+                              "legacy": {
+                                "followers_count": 900,
+                                "friends_count": 80,
+                                "statuses_count": 4000,
+                                "description": "another synthetic bio",
+                                "url": null
+                              }
+                            }
+                          }
+                        },
+                        "legacy": {
+                          "full_text": "Second synthetic home-feed tweet.",
+                          "created_at": "Sun Jul 19 10:30:00 +0000 2026",
+                          "favorite_count": 12,
+                          "retweet_count": 4,
+                          "reply_count": 2,
+                          "quote_count": 1,
+                          "bookmark_count": 0,
+                          "lang": "en",
+                          "conversation_id_str": "7002",
+                          "in_reply_to_status_id_str": null,
+                          "is_quote_status": false,
+                          "entities": {
+                            "urls": [],
+                            "hashtags": []
+                          }
+                        },
+                        "views": {
+                          "count": "77"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "entryId": "promoted-tweet-7003",
+                "content": {
+                  "entryType": "TimelineTimelineItem",
+                  "itemContent": {
+                    "itemType": "TimelineTweet",
+                    "tweet_results": {
+                      "result": {
+                        "__typename": "Tweet",
+                        "rest_id": "7003",
+                        "core": {
+                          "user_results": {
+                            "result": {
+                              "rest_id": "9103",
+                              "is_blue_verified": true,
+                              "core": {
+                                "name": "Synthetic Advertiser",
+                                "screen_name": "synth_ad",
+                                "created_at": "Wed Mar 03 00:00:00 +0000 2020"
+                              },
+                              "legacy": {
+                                "followers_count": 5000,
+                                "friends_count": 1,
+                                "statuses_count": 50,
+                                "description": "synthetic ad account",
+                                "url": null
+                              }
+                            }
+                          }
+                        },
+                        "legacy": {
+                          "full_text": "Synthetic promoted post that must NOT be returned.",
+                          "created_at": "Mon Jul 20 08:00:00 +0000 2026",
+                          "favorite_count": 0,
+                          "retweet_count": 0,
+                          "reply_count": 0,
+                          "quote_count": 0,
+                          "bookmark_count": 0,
+                          "lang": "en",
+                          "conversation_id_str": "7003",
+                          "in_reply_to_status_id_str": null,
+                          "is_quote_status": false,
+                          "entities": {
+                            "urls": [],
+                            "hashtags": []
+                          }
+                        },
+                        "views": {
+                          "count": "1"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "entryId": "whoToFollow-7004",
+                "content": {
+                  "entryType": "TimelineTimelineModule",
+                  "displayType": "Vertical",
+                  "items": []
+                }
+              },
+              {
+                "entryId": "cursor-top-7000",
+                "content": {
+                  "entryType": "TimelineTimelineCursor",
+                  "cursorType": "Top",
+                  "value": "CURSOR_TOP_HOME_PAGE1"
+                }
+              },
+              {
+                "entryId": "cursor-bottom-7000",
+                "content": {
+                  "entryType": "TimelineTimelineCursor",
+                  "cursorType": "Bottom",
+                  "value": "CURSOR_BOTTOM_HOME_PAGE1"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
