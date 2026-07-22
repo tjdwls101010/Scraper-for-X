@@ -1,8 +1,8 @@
 # The transaction-id wall
 
-Why three commands (`search`, `fetch --replies`, `followers`) are less reliable than the rest of this tool, what `scrape-x` does about it, and what to do when it breaks. Read this if one of those three started failing, or before you build anything that depends on them.
+Why three commands (`search`, `fetch --replies`, `followers`) are less reliable than the rest of this tool, what `agentic-x` does about it, and what to do when it breaks. Read this if one of those three started failing, or before you build anything that depends on them.
 
-Everything else in `scrape-x` reads X over plain HTTP with a session cookie and nothing clever. These three do not, and that difference is worth understanding rather than discovering at 2am.
+Everything else in `agentic-x` reads X over plain HTTP with a session cookie and nothing clever. These three do not, and that difference is worth understanding rather than discovering at 2am.
 
 ## What the wall is
 
@@ -10,9 +10,9 @@ X's web client sends an `x-client-transaction-id` header on every GraphQL reques
 
 | Operation | Command | Without the header |
 |---|---|---|
-| `SearchTimeline` | `scrape-x search` | HTTP 404, empty body |
-| `UserTweetsAndReplies` | `scrape-x fetch --replies` | HTTP 404, empty body |
-| `Followers` | `scrape-x followers` | HTTP 404, empty body |
+| `SearchTimeline` | `agentic-x search` | HTTP 404, empty body |
+| `UserTweetsAndReplies` | `agentic-x fetch --replies` | HTTP 404, empty body |
+| `Followers` | `agentic-x followers` | HTTP 404, empty body |
 
 The 404 is not a "not found" in any meaningful sense — the target exists, the query-id is current, the session is valid. X simply declines to answer.
 
@@ -20,15 +20,15 @@ The 404 is not a "not found" in any meaningful sense — the target exists, the 
 
 ## Why it cannot be harvested once
 
-`scrape-x`'s whole design is harvest-then-replay: log in once with a browser, keep the cookies and query-ids, then never open a browser again. Session cookies last weeks. Query-ids last two to four weeks. Both are worth harvesting.
+`agentic-x`'s whole design is harvest-then-replay: log in once with a browser, keep the cookies and query-ids, then never open a browser again. Session cookies last weeks. Query-ids last two to four weeks. Both are worth harvesting.
 
 The transaction id is **single-use**. A real header, intercepted from X's own client mid-request, was replayed over plain HTTP immediately afterwards and returned 404 — X had already spent it on the request it came from. Capture-and-replay is therefore not a slower or riskier option for these three ops; it is not an option.
 
 That leaves generating a fresh one per request, which is what v0.3.0 added.
 
-## How `scrape-x` generates one
+## How `agentic-x` generates one
 
-The algorithm is reconstructed from X's own client code. `scrape-x` fetches `https://x.com/home` once per session with cookies only, and takes three ingredients out of the page:
+The algorithm is reconstructed from X's own client code. `agentic-x` fetches `https://x.com/home` once per session with cookies only, and takes three ingredients out of the page:
 
 1. a `twitter-site-verification` meta tag, base64-decoded into key bytes,
 2. four `loading-x-anim-*` SVG frames, whose path geometry drives an animation key,
@@ -40,7 +40,7 @@ The implementation is ported from [iSarabjitDhiman/XClientTransaction](https://g
 
 ## Be honest with yourself about the reliability
 
-This is the one part of `scrape-x` that is reverse-engineered rather than merely undocumented. X can invalidate it with any client deploy, without notice and without anything resembling a deprecation. It has no stability guarantee and cannot be given one.
+This is the one part of `agentic-x` that is reverse-engineered rather than merely undocumented. X can invalidate it with any client deploy, without notice and without anything resembling a deprecation. It has no stability guarantee and cannot be given one.
 
 What that means practically:
 
@@ -77,13 +77,13 @@ Query-id drift also exits 4, and it is a different, far more routine problem wit
 |---|---|---|
 | Affects | `search`, `fetch --replies`, `followers` | potentially every read |
 | Frequency | whenever X changes the algorithm | every 2–4 weeks, reliably |
-| Fix | a new release of this package | `scrape-x doctor --refresh`, locally |
+| Fix | a new release of this package | `agentic-x doctor --refresh`, locally |
 
-If `fetch` and `feed` are failing too, it is rotation, not this. Run `scrape-x doctor --refresh` first — see [FAQ and Troubleshooting](FAQ-and-Troubleshooting.md#i-get-exit-code-4--a-parse-error).
+If `fetch` and `feed` are failing too, it is rotation, not this. Run `agentic-x doctor --refresh` first — see [FAQ and Troubleshooting](FAQ-and-Troubleshooting.md#i-get-exit-code-4--a-parse-error).
 
 ## The browser fallback
 
-When a generated id is refused, `scrape-x search` and `scrape-x fetch --replies` fall back automatically: they drive the stealth browser to the page that fires the operation naturally (`/search?q=…&f=live`, `/<handle>/with_replies`) and parse the response X's own client received. Same parser, same output shape, no special handling required by the caller.
+When a generated id is refused, `agentic-x search` and `agentic-x fetch --replies` fall back automatically: they drive the stealth browser to the page that fires the operation naturally (`/search?q=…&f=live`, `/<handle>/with_replies`) and parse the response X's own client received. Same parser, same output shape, no special handling required by the caller.
 
 ```
 SearchTimeline: X refused the generated x-client-transaction-id (the generator has likely rotted).

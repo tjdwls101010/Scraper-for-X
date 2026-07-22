@@ -1,16 +1,16 @@
 # CLI Reference
 
-The complete, flag-by-flag reference for `scrape-x`. The [README](../../README.md) has a condensed version of this; this page is the authoritative one — every default and every exit code here is read directly out of `build_parser()`, `_finish()`, and `_handle_common_errors()` in `src/scraper_for_x/cli.py`, not copied from memory.
+The complete, flag-by-flag reference for `agentic-x`. The [README](../../README.md) has a condensed version of this; this page is the authoritative one — every default and every exit code here is read directly out of `build_parser()`, `_finish()`, and `_handle_common_errors()` in `src/agentic_x/cli.py`, not copied from memory.
 
-If you haven't run either of these yet, do them in this order first: [Installation](Installation.md), then `scrape-x setup`, then `scrape-x login`.
+If you haven't run either of these yet, do them in this order first: [Installation](Installation.md), then `agentic-x setup`, then `agentic-x login`.
 
 ## Global
 
 ```
-scrape-x --version
+agentic-x --version
 ```
 
-Prints `scrape-x <version>` and exits 0. This is the only thing you can do without a subcommand — `scrape-x` with no arguments (or an unrecognized one) is a usage error (see [Exit codes](#exit-codes) below).
+Prints `agentic-x <version>` and exits 0. This is the only thing you can do without a subcommand — `agentic-x` with no arguments (or an unrecognized one) is a usage error (see [Exit codes](#exit-codes) below).
 
 Every subcommand below also accepts `-h`/`--help`.
 
@@ -31,7 +31,7 @@ Alternatively, `--cookies PATH` imports an already-exported cookie file instead 
 **Example (browser login):**
 
 ```bash
-scrape-x login
+agentic-x login
 ```
 
 ```
@@ -41,19 +41,19 @@ Logged in. Profile saved: 'default'
 If the harvest doesn't find both an `auth_token` and a `ct0` cookie (e.g. you closed the window without actually logging in):
 
 ```
-Could not verify login (no auth_token/ct0 cookie found). Try again: scrape-x login
+Could not verify login (no auth_token/ct0 cookie found). Try again: agentic-x login
 ```
 
 A second profile, e.g. for a throwaway account kept separate from your main one:
 
 ```bash
-scrape-x login --profile burner
+agentic-x login --profile burner
 ```
 
 **Example (`--cookies` import):**
 
 ```bash
-scrape-x login --cookies ~/exports/x-cookies.json
+agentic-x login --cookies ~/exports/x-cookies.json
 ```
 
 ```
@@ -81,7 +81,7 @@ Checks whether a profile's persisted session is still logged in, via one cheap a
 **Example (human-readable):**
 
 ```bash
-scrape-x status
+agentic-x status
 ```
 
 ```
@@ -91,7 +91,7 @@ status: logged_in
 **Example (`--json`, for scripting):**
 
 ```bash
-scrape-x status --json
+agentic-x status --json
 ```
 
 ```json
@@ -101,10 +101,10 @@ scrape-x status --json
 If no session has ever been saved for the profile:
 
 ```
-no session for profile 'default': run `scrape-x login` Run: scrape-x login --profile default
+no session for profile 'default': run `agentic-x login` Run: agentic-x login --profile default
 ```
 
-(with `--json`: `{"status": "not_logged_in", "error": "no session for profile 'default': run \`scrape-x login\`"}`)
+(with `--json`: `{"status": "not_logged_in", "error": "no session for profile 'default': run \`agentic-x login\`"}`)
 
 **Exit codes:** `0` = `logged_in`, `2` = `expired` (also covers a not-yet-logged-in profile — `LoginRequiredError`), `3` = `rate_limited` (the status check's own probe request got a 429), `1` = the status check itself failed unexpectedly for some other reason.
 
@@ -121,7 +121,7 @@ You normally run this exactly once, right after installing the package, before y
 **Example:**
 
 ```bash
-scrape-x setup
+agentic-x setup
 ```
 
 ```
@@ -145,7 +145,7 @@ Run this after `login`, and any time `fetch`/`search`/`tweet` behaves strangely 
 **Example:**
 
 ```bash
-scrape-x doctor
+agentic-x doctor
 ```
 
 ```
@@ -155,7 +155,7 @@ OK - authenticated round-trip succeeded
 **Example (`--refresh`):**
 
 ```bash
-scrape-x doctor --refresh
+agentic-x doctor --refresh
 ```
 
 ```
@@ -165,11 +165,11 @@ OK - authenticated round-trip succeeded; re-anchored 5 query-id(s)
 If the session isn't usable, or no session exists yet:
 
 ```
-session check failed: expired (run `scrape-x login`)
+session check failed: expired (run `agentic-x login`)
 ```
 
 ```
-no session for profile 'default': run `scrape-x login`
+no session for profile 'default': run `agentic-x login`
 ```
 
 **Exit codes:** `0` if the round trip (and, with `--refresh`, the re-anchor) succeeds, `1` otherwise. Note `doctor` never exits 2/3 itself — a failed session check or missing session both come back as exit `1`, with the reason in the message. The message is always redaction-scrubbed before printing.
@@ -179,7 +179,7 @@ no session for profile 'default': run `scrape-x login`
 A profile's tweets/replies/media.
 
 ```
-scrape-x fetch <identifier> [flags]
+agentic-x fetch <identifier> [flags]
 ```
 
 `<identifier>` is required and positional — a `@handle`, a bare username, a numeric id, or a full profile/tweet URL on `x.com`/`twitter.com` (any subdomain among `www.`/`mobile.`/`m.` is stripped first). Anything that doesn't match one of those shapes, or a URL on a different host, is rejected before any network request is made (exit code `1`; see [Exit codes](#exit-codes)).
@@ -211,28 +211,28 @@ If `--output` is omitted, the file is written under this package's own data dire
 
 ```bash
 # Last 30 tweets, defaults everywhere else.
-scrape-x fetch nasa --limit 30
+agentic-x fetch nasa --limit 30
 
 # Everything since a date, as NDJSON to a specific file.
-scrape-x fetch @nasa --since 2026-04-01 --format ndjson --output ~/x-export.ndjson
+agentic-x fetch @nasa --since 2026-04-01 --format ndjson --output ~/x-export.ndjson
 
 # A numeric-id profile.
-scrape-x fetch 11348282 --limit 10
+agentic-x fetch 11348282 --limit 10
 
 # Force handle interpretation for an all-digit vanity name.
-scrape-x fetch 123456 --by screen_name
+agentic-x fetch 123456 --by screen_name
 
 # A profile URL, waiting out a rate limit instead of stopping partway.
-scrape-x fetch https://x.com/nasa --wait-on-limit --max-wait 300
+agentic-x fetch https://x.com/nasa --wait-on-limit --max-wait 300
 
 # Debugging a suspected parser issue.
-scrape-x fetch nasa --limit 5 --raw -v
+agentic-x fetch nasa --limit 5 --raw -v
 ```
 
 **Example stderr summary (success):**
 
 ```
-30 tweets, range 2026-04-02..2026-07-04, stop reason: limit_reached. Saved to /Users/you/Library/Application Support/scraper-for-x/output/nasa-20260705T031813385206Z.json
+30 tweets, range 2026-04-02..2026-07-04, stop reason: limit_reached. Saved to /Users/you/Library/Application Support/agentic-x/output/nasa-20260705T031813385206Z.json
 ```
 
 **Example stderr summary (`--since` not confirmed reached — see below):**
@@ -246,7 +246,7 @@ scrape-x fetch nasa --limit 5 --raw -v
 Your own home timeline (`HomeTimeline`).
 
 ```
-scrape-x feed [flags]
+agentic-x feed [flags]
 ```
 
 **Takes no identifier** — the feed belongs to the logged-in session, which is what makes it the one read with nothing to target. Needs no transaction id. Promoted/advertisement entries are present in X's response and are dropped before anything is written.
@@ -256,12 +256,12 @@ scrape-x feed [flags]
 `--limit`, `--since`, `--until`, `--format`, `--output`, `--wait-on-limit`, `--max-wait`, `--profile`, `--profile-dir`, `--raw`, `--no-redact`, `-v` — all with the same meaning and defaults as [`fetch`](#fetch). There is no `--replies`/`--by`, since there is no target to interpret.
 
 ```bash
-scrape-x feed --limit 20
-scrape-x feed --since 2026-07-01 --format ndjson --output ~/feed.ndjson
+agentic-x feed --limit 20
+agentic-x feed --since 2026-07-01 --format ndjson --output ~/feed.ndjson
 ```
 
 ```
-20 tweets, range 2026-07-19..2026-07-20, stop reason: limit_reached. Saved to /Users/you/Library/Application Support/scraper-for-x/output/home-20260720T133040191608Z.json
+20 tweets, range 2026-07-19..2026-07-20, stop reason: limit_reached. Saved to /Users/you/Library/Application Support/agentic-x/output/home-20260720T133040191608Z.json
 ```
 
 The default filename uses `home` in place of an identifier.
@@ -273,7 +273,7 @@ Tweets matching a query, including X's advanced search operators.
 **This is one of the three commands behind the [transaction-id wall](Transaction-ID.md)** — it works, but it depends on a reverse-engineered header that X can invalidate at any time. It falls back to the browser (first page only) when that happens, if the `[browser]` extra is installed.
 
 ```
-scrape-x search <query> [flags]
+agentic-x search <query> [flags]
 ```
 
 `<query>` is required and positional — passed through verbatim to X's `SearchTimeline` GraphQL operation, so anything X's own search box accepts (`from:`, `since:`, `-filter:replies`, quoted phrases, etc.) works here too.
@@ -302,13 +302,13 @@ There is no `--replies`/`--by` for `search` — those are `fetch`-only, since a 
 
 ```bash
 # Latest tweets matching a query.
-scrape-x search "anthropic claude" --limit 50
+agentic-x search "anthropic claude" --limit 50
 
 # Top/algorithmic ranking instead of chronological.
-scrape-x search "spacex starship" --product top --limit 20
+agentic-x search "spacex starship" --product top --limit 20
 
 # Advanced operators, bounded to a date window.
-scrape-x search "from:nasa since:2026-01-01" --since 2026-01-01 --until 2026-03-31
+agentic-x search "from:nasa since:2026-01-01" --since 2026-01-01 --until 2026-03-31
 ```
 
 A query that legitimately matches nothing is not an error — stop reason `no_matches`, exit `0`, an empty (or `[]`) output file.
@@ -320,9 +320,9 @@ A query that legitimately matches nothing is not an error — stop reason `no_ma
 The social graph. **These three emit `User` objects, not `Tweet`** — the only commands that do. See [Output Schema](Output-Schema.md#user-as-a-top-level-result).
 
 ```
-scrape-x following <identifier> [flags]
-scrape-x followers <identifier> [flags]
-scrape-x retweeters <identifier> [flags]
+agentic-x following <identifier> [flags]
+agentic-x followers <identifier> [flags]
+agentic-x retweeters <identifier> [flags]
 ```
 
 - `following <identifier>` / `followers <identifier>` — accounts a user follows / accounts following them. `<identifier>` is a profile identifier, same forms and same `--by` disambiguation as [`fetch`](#fetch).
@@ -337,9 +337,9 @@ scrape-x retweeters <identifier> [flags]
 ### Example invocations
 
 ```bash
-scrape-x following nasa --limit 100
-scrape-x followers nasa --limit 50 --format ndjson
-scrape-x retweeters https://x.com/nasa/status/1234567890123456789 --limit 20
+agentic-x following nasa --limit 100
+agentic-x followers nasa --limit 50 --format ndjson
+agentic-x retweeters https://x.com/nasa/status/1234567890123456789 --limit 20
 ```
 
 ```
@@ -359,7 +359,7 @@ So these three commands stop after three consecutive account-less pages, with st
 Prints a machine-readable JSON description of the whole CLI — every command, every flag with its type and default, the exit-code contract, and which object type each command emits.
 
 ```bash
-scrape-x catalog
+agentic-x catalog
 ```
 
 Offline, no session, no network, always exit `0`. `--json` is accepted for symmetry with `schema --json` but does nothing: this command has no non-JSON form.
@@ -375,7 +375,7 @@ Prints the output object schema — `Tweet`, its nested `User` and `Media` — a
 One tweet plus (optionally) its reply/conversation thread.
 
 ```
-scrape-x tweet <identifier> [flags]
+agentic-x tweet <identifier> [flags]
 ```
 
 `<identifier>` is required and positional — a tweet URL (`.../status/<id>`, with or without a leading handle, `/i/web/status/<id>` included) or a bare numeric tweet id. Anything else — including a bare handle or profile URL — is rejected with exit `1` (`tweet` only accepts a tweet-shaped identifier, unlike `fetch`, which also accepts profile identifiers).
@@ -401,13 +401,13 @@ There is no `--limit`/`--since`/`--until`/`--by` for `tweet` — those don't app
 
 ```bash
 # Just the tweet itself.
-scrape-x tweet https://x.com/nasa/status/1234567890123456789
+agentic-x tweet https://x.com/nasa/status/1234567890123456789
 
 # The tweet plus its full reply thread.
-scrape-x tweet 1234567890123456789 --replies
+agentic-x tweet 1234567890123456789 --replies
 
 # A trailing /photo/1 suffix is tolerated.
-scrape-x tweet https://x.com/nasa/status/1234567890123456789/photo/1
+agentic-x tweet https://x.com/nasa/status/1234567890123456789/photo/1
 ```
 
 If the tweet doesn't exist (deleted, or the thread is otherwise unavailable), and the underlying pagination stopped with `feed_exhausted` or `max_requests` having yielded nothing matching the requested id, this is `NotFoundError` → exit `5`.
@@ -417,7 +417,7 @@ If the tweet doesn't exist (deleted, or the thread is otherwise unavailable), an
 Every read command (`fetch`, `feed`, `search`, `tweet`, `following`, `followers`, `retweeters`) hits X's per-endpoint 15-minute rate limits eventually on a long pull. Those limits are **per operation** and differ by more than an order of magnitude, so "a deep pull" costs very different amounts depending on which command it is — see the table in [FAQ and Troubleshooting](FAQ-and-Troubleshooting.md#im-hitting-rate-limits-constantly). What happens next depends on `--wait-on-limit`:
 
 - **Without `--wait-on-limit` (default):** a 429 immediately stops the run with stop reason `rate_limited`, and whatever was collected so far is still written to the output file. Exit code `3`.
-- **With `--wait-on-limit`:** if the 429 response carried an `x-rate-limit-reset` header (a unix timestamp), the run instead prints `scrape-x: waiting <N>s until rate-limit reset` to stderr, sleeps until that reset time, then retries the same request and continues pagination — the run does not stop or lose progress. If the 429 carried no reset timestamp at all, `--wait-on-limit` has nothing to wait for and the run stops the same as if the flag were absent (stop reason `rate_limited`, exit `3`).
+- **With `--wait-on-limit`:** if the 429 response carried an `x-rate-limit-reset` header (a unix timestamp), the run instead prints `agentic-x: waiting <N>s until rate-limit reset` to stderr, sleeps until that reset time, then retries the same request and continues pagination — the run does not stop or lose progress. If the 429 carried no reset timestamp at all, `--wait-on-limit` has nothing to wait for and the run stops the same as if the flag were absent (stop reason `rate_limited`, exit `3`).
 - **`--max-wait SECONDS`** caps a single wait: the actual sleep is `min(time_until_reset, max_wait)`. If the reset is further away than `--max-wait`, the run wakes up early and retries anyway (X may 429 it again immediately, in which case the wait/retry repeats). Without `--max-wait`, the wait is however long is left until the real reset — potentially close to 15 minutes.
 
 This retry loop is the only automatic retry anywhere in the tool — every other error (401/expired, structural parse failure, unavailable profile) stops the run immediately rather than retrying blind.
@@ -502,7 +502,7 @@ The last two are the ones most likely to be misread, because both produce a norm
 |---|---|
 | 0 | `logged_in` — session is valid. |
 | 1 | The status check itself failed unexpectedly for a reason other than session state. |
-| 2 | `expired`, or no session has ever been saved for this profile (`LoginRequiredError`) — both map here. Run `scrape-x login`. |
+| 2 | `expired`, or no session has ever been saved for this profile (`LoginRequiredError`) — both map here. Run `agentic-x login`. |
 | 3 | `rate_limited` — the status probe itself hit a 429. |
 
 ### `setup`
@@ -531,15 +531,15 @@ The last two are the ones most likely to be misread, because both produce a norm
 |---|---|---|
 | 0 | Success — `--limit` satisfied, `--since`/`--until` window fully covered, the feed/search was genuinely exhausted, or (search) legitimately matched nothing. | Default, unless the `--since`-inconclusive case below applies. |
 | 1 | Invalid identifier, or any other/unexpected error. | `InvalidIdentifierError` on the positional argument (including `tweet` being given a non-tweet identifier). Also the catch-all fallback when the raised exception isn't one of the typed errors below. Also: **any argparse usage error** (bad/missing flag, unknown subcommand) — see note below. |
-| 2 | Login required, session expired, or soft-locked. | `LoginRequiredError` (no session for this profile) / `SessionExpiredError` (explicit 401/logged-out marker, or a soft-locked session detected by the pre-exit-4 probe — see below) from `retrieve.*`. Message includes `Run: scrape-x login --profile <name>`. |
+| 2 | Login required, session expired, or soft-locked. | `LoginRequiredError` (no session for this profile) / `SessionExpiredError` (explicit 401/logged-out marker, or a soft-locked session detected by the pre-exit-4 probe — see below) from `retrieve.*`. Message includes `Run: agentic-x login --profile <name>`. |
 | 3 | Rate-limited before completion. | `RateLimitedError` — a 429 with `--wait-on-limit` not set (or set but the response carried no reset timestamp to wait on). Partial result is still written. |
-| 4 | What X served no longer matches what this package expects. | Two distinct causes, distinguished by the message. **Query-id drift** — `EnvelopeParseError` from the parser: the `instructions`/`entries`/`cursor` anchors are not locatable. Fix locally with `scrape-x doctor --refresh`. **Transaction-id failure** — `TransactionIdError` (the generator could not run) or a gated op refusing a minted header, affecting only `search`/`fetch --replies`/`followers`; see [Transaction-ID](Transaction-ID.md#when-it-breaks-two-different-failures). Neither is ever raised for a merely-empty but structurally valid result; see the soft-lock probe below. |
+| 4 | What X served no longer matches what this package expects. | Two distinct causes, distinguished by the message. **Query-id drift** — `EnvelopeParseError` from the parser: the `instructions`/`entries`/`cursor` anchors are not locatable. Fix locally with `agentic-x doctor --refresh`. **Transaction-id failure** — `TransactionIdError` (the generator could not run) or a gated op refusing a minted header, affecting only `search`/`fetch --replies`/`followers`; see [Transaction-ID](Transaction-ID.md#when-it-breaks-two-different-failures). Neither is ever raised for a merely-empty but structurally valid result; see the soft-lock probe below. |
 | 5 | Target (profile or tweet) unavailable. | `ProfileUnavailableError` (`fetch`/`following`/`followers`: suspended/protected/nonexistent account) or `NotFoundError` (`tweet`: deleted tweet or unavailable thread). |
 | 7 | Partial: `--since` requested but not confirmed reached. | `args.since is not None`, `since_target_crossed` is `False`, and stop reason is `limit_reached` or `max_requests`. See [above](#--since--until-semantics-and-exit-code-7). |
 
 **A genuinely empty (but structurally parsed) result is not automatically exit 4.** When a run yields nothing at all, `retrieve.py` runs a pre-exit-4 soft-lock probe (the same cheap `UserByScreenName` check `status`/`doctor` use) before accepting that the emptiness is real: for `search`, an empty result is `no_matches` (exit `0`); for everything else, if the probe says the session is no longer logged in, the stop reason becomes `soft_locked` and the CLI raises `SessionExpiredError` (exit `2`) instead of silently reporting an empty success. Only a genuine structural parse failure (the envelope itself can't be walked) reaches exit `4`.
 
-**Argparse usage errors are exit code 1, not argparse's usual 2.** This CLI overrides `argparse.ArgumentParser.error()` (the `_ArgumentParser` class in `cli.py`) specifically so that a typo'd flag or missing required argument exits `1`, not `2` — because exit `2` already has a specific, different meaning in this CLI's contract ("login required, expired, or soft-locked"). Without this override, a script checking `if exit_code == 2: run login` could be fooled by an unrelated CLI typo into thinking the session had expired. So: `scrape-x fetch` with no identifier, an unknown flag, or `scrape-x bogus-subcommand` all exit `1`, printing usage to stderr — same code as "other/unexpected error," on purpose.
+**Argparse usage errors are exit code 1, not argparse's usual 2.** This CLI overrides `argparse.ArgumentParser.error()` (the `_ArgumentParser` class in `cli.py`) specifically so that a typo'd flag or missing required argument exits `1`, not `2` — because exit `2` already has a specific, different meaning in this CLI's contract ("login required, expired, or soft-locked"). Without this override, a script checking `if exit_code == 2: run login` could be fooled by an unrelated CLI typo into thinking the session had expired. So: `agentic-x fetch` with no identifier, an unknown flag, or `agentic-x bogus-subcommand` all exit `1`, printing usage to stderr — same code as "other/unexpected error," on purpose.
 
 ## See also
 

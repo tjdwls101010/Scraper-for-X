@@ -1,4 +1,4 @@
-# scraper-for-x — live recon findings (2026-07-20)
+# agentic-x — live recon findings (2026-07-20)
 
 Empirical grounding for [`2026-07-20-active-mode-expansion-plan.md`](2026-07-20-active-mode-expansion-plan.md). Captured against a **throwaway** X account (profile `recon`) on 2026-07-20. **Query-ids rotate every 2–4 weeks — re-capture in Phase 0 before relying on any id below.**
 

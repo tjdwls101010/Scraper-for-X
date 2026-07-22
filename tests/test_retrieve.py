@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from scraper_for_x import errors, gql, retrieve, session
+from agentic_x import errors, gql, retrieve, session
 
 
 def _tweet_entry(rest_id: str, created_at: str, *, text: str = "synthetic") -> dict:

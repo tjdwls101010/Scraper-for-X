@@ -1,4 +1,4 @@
-"""``scrape-x`` command-line entry point (plan §10)."""
+"""``agentic-x`` command-line entry point (plan §10)."""
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ _PROFILE_DIR_HELP = (
     "(default: platform data dir, or $SFX_PROFILE_DIR)."
 )
 
-#: Shown both in the top-level subcommand list (help=) and in `scrape-x search
+#: Shown both in the top-level subcommand list (help=) and in `agentic-x search
 #: --help` (description=). These two ops sit behind X's transaction-id wall; the
 #: header is generated per request (see transaction.py), which is the one
 #: reverse-engineered, rot-prone part of this package — so the help says so
@@ -146,14 +146,14 @@ def _add_common_fetch_args(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = _ArgumentParser(
-        prog="scrape-x",
+        prog="agentic-x",
         description=(
             "Read-only X/Twitter scraper. Log in once, then read over plain HTTP: "
             "your home feed, a profile's tweets and replies, a tweet's thread, search, "
             "and the social graph. Every command is a single-target primitive that "
             "writes JSON — chain them yourself for multi-hop exploration. "
-            "`scrape-x catalog` describes this whole surface as JSON; "
-            "`scrape-x schema` describes what comes back."
+            "`agentic-x catalog` describes this whole surface as JSON; "
+            "`agentic-x schema` describes what comes back."
         ),
         epilog=(
             "search, fetch --replies and followers depend on a reverse-engineered "
@@ -161,7 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Read DISCLAIMER.md before using this; use a throwaway account."
         ),
     )
-    parser.add_argument("--version", action="version", version=f"scrape-x {__version__}")
+    parser.add_argument("--version", action="version", version=f"agentic-x {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     login_p = subparsers.add_parser(
@@ -220,7 +220,7 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Emit a machine-readable description of every command, argument and exit "
             "code as JSON, derived from the parser itself. Intended for agents driving "
-            "scrape-x; pair it with `scrape-x schema --json` for the output shape."
+            "agentic-x; pair it with `agentic-x schema --json` for the output shape."
         ),
     )
     catalog_p.add_argument(
@@ -310,7 +310,7 @@ def build_parser() -> argparse.ArgumentParser:
     search_p.add_argument("--until", type=_parse_iso_date, default=None)
     _add_common_fetch_args(search_p)
 
-    # Social graph. These emit User objects, not Tweets -- see `scrape-x schema`.
+    # Social graph. These emit User objects, not Tweets -- see `agentic-x schema`.
     for name, help_text, target_help in (
         ("following", "Accounts a user follows.", "@handle, username, numeric id, or profile URL."),
         (
@@ -374,7 +374,7 @@ def _cmd_login(args: argparse.Namespace) -> int:
         print(f"Logged in. Profile saved: {args.profile!r}", file=sys.stderr)
         return 0
     print(
-        "Could not verify login (no auth_token/ct0 cookie found). Try again: scrape-x login",
+        "Could not verify login (no auth_token/ct0 cookie found). Try again: agentic-x login",
         file=sys.stderr,
     )
     return 2
@@ -394,7 +394,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
         if args.json:
             print(json.dumps({"status": "not_logged_in", "error": str(exc)}))
         else:
-            print(f"{exc} Run: scrape-x login --profile {args.profile}", file=sys.stderr)
+            print(f"{exc} Run: agentic-x login --profile {args.profile}", file=sys.stderr)
         return 2
     except Exception as exc:  # noqa: BLE001 - last-resort CLI boundary
         print(redact.redact_raw_text(f"status check failed: {exc}"), file=sys.stderr)
@@ -443,7 +443,7 @@ def _cmd_schema(args: argparse.Namespace) -> int:
         print(json.dumps(json_schema(), indent=2))
         return 0
     print(
-        "scrape-x output schema — `fetch`/`tweet` write a JSON array of Tweet objects "
+        "agentic-x output schema — `fetch`/`tweet` write a JSON array of Tweet objects "
         "(one per line with --format ndjson).\n"
         "Nested objects: Tweet.author is a User; Tweet.media[] are Media; "
         "Tweet.retweeted_tweet / Tweet.quoted_tweet are nested Tweets.\n"
@@ -541,12 +541,12 @@ def build_catalog() -> dict:
         )
     return {
         "catalog_version": CATALOG_VERSION,
-        "package": "scraper-for-x",
-        "command": "scrape-x",
+        "package": "agentic-x",
+        "command": "agentic-x",
         "version": __version__,
         "commands": commands,
         "exit_codes": {str(code): text for code, text in _EXIT_CODES.items()},
-        "output_schema": "scrape-x schema --json",
+        "output_schema": "agentic-x schema --json",
     }
 
 
@@ -641,7 +641,7 @@ def _handle_common_errors(exc: Exception, args: argparse.Namespace) -> int:
     ``exc`` isn't one of the mapped types, signaling the caller to fall
     through to its own last-resort handling."""
     if isinstance(exc, (LoginRequiredError, SessionExpiredError)):
-        print(f"{exc} Run: scrape-x login --profile {args.profile}", file=sys.stderr)
+        print(f"{exc} Run: agentic-x login --profile {args.profile}", file=sys.stderr)
         return 2
     if isinstance(exc, RateLimitedError):
         print(f"rate-limited: {exc}", file=sys.stderr)
@@ -649,7 +649,7 @@ def _handle_common_errors(exc: Exception, args: argparse.Namespace) -> int:
     if isinstance(exc, EnvelopeParseError):
         print(
             f"response envelope could not be parsed (possible query-id drift): {exc}. "
-            "Try: scrape-x doctor --refresh",
+            "Try: agentic-x doctor --refresh",
             file=sys.stderr,
         )
         return 4
@@ -713,7 +713,7 @@ def _load_read_client(args: argparse.Namespace) -> tuple[client.ReadClient, dict
     try:
         credential = auth.load_session(args.profile, profile_dir_override=args.profile_dir)
     except LoginRequiredError as exc:
-        print(f"{exc} Run: scrape-x login --profile {args.profile}", file=sys.stderr)
+        print(f"{exc} Run: agentic-x login --profile {args.profile}", file=sys.stderr)
         return 2
     query_ids, features = session.query_ids_for(credential)
     read_client = client.ReadClient(credential.auth_token, credential.ct0, credential.user_agent)
@@ -812,7 +812,7 @@ def _cmd_feed(args: argparse.Namespace) -> int:
 #: CLI name -> X operation, for the three User-returning commands. `likers` is
 #: absent on purpose: probed live 2026-07-20, X no longer exposes a likers list
 #: (/likes redirects to the tweet, and the op appears in none of its 685 JS
-#: chunks). For quoters, use: scrape-x search "quoted_tweet_id:<id>".
+#: chunks). For quoters, use: agentic-x search "quoted_tweet_id:<id>".
 _GRAPH_OPERATIONS = {
     "following": "Following",
     "followers": "Followers",

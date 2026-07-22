@@ -1,4 +1,4 @@
-# scraper-for-x — v0.3.0 expansion plan (feed · search · replies · social graph)
+# agentic-x — v0.3.0 expansion plan (feed · search · replies · social graph)
 
 **Status:** PLAN (written 2026-07-20). Implementation happens in a *separate* Claude session.
 **Companion docs:** [`2026-07-20-recon-findings.md`](2026-07-20-recon-findings.md) (live-captured evidence this plan rests on) and [`IMPLEMENTATION-KICKOFF.md`](IMPLEMENTATION-KICKOFF.md) (the paste-in prompt for the implementation session).
@@ -7,7 +7,7 @@
 
 ## 0. TL;DR / positioning
 
-scraper-for-x (PyPI v0.2.0) is already a **harvest-then-replay** scraper: a stealth-browser (or cookie-import) login harvests the session once (`auth_token`/`ct0`/UA + query-ids/features), then every read is a plain `httpx` GraphQL request — no browser in the hot path. This is the architecture scraper-for-**fb** is only now planning; X is ahead.
+agentic-x (PyPI v0.2.0) is already a **harvest-then-replay** scraper: a stealth-browser (or cookie-import) login harvests the session once (`auth_token`/`ct0`/UA + query-ids/features), then every read is a plain `httpx` GraphQL request — no browser in the hot path. This is the architecture scraper-for-**fb** is only now planning; X is ahead.
 
 The v0.3.0 goal is **not** "rebuild" — it is **unblock the walled ops and widen the surface** so a future `.claude/skills/x-fetch` can chain fast, clean-schema primitives to explore X the way a human does (feed → a post → its author → their replies → search → the social graph). The CLI stays a set of **primitives**; the multi-hop navigation lives in the skill (same division scraper-for-fb settled on).
 
@@ -91,7 +91,7 @@ The v0.3.0 goal is **not** "rebuild" — it is **unblock the walled ops and wide
 
 **Wiring:** `ReadClient.get()`/`.post()` gain an optional `needs_txid: bool`. When true, call `transaction.generate(method, path)` and set the header. A small `GATED_OPS = {"SearchTimeline", "UserTweetsAndReplies", …probed social-graph ops}` set decides. **Ungated ops must NOT send a txid** (unnecessary, and one more thing to break).
 
-**Fallback (option B), only for gated ops when A fails:** detect failure as an HTTP 404/empty-body from a gated op *after* a successful txid generation (i.e. the header was sent but rejected). Fall back to `StealthySession`: navigate to the op's page (`/search?q=…&f=live`, `/<handle>/with_replies`), capture the organic GraphQL response via `capture_xhr`, hand the *same* body to `parse.walk_instructions`. This reuses the fb-style browser-observe path and the shared parser. Gate B behind the `[browser]` extra; if it's not installed, fail with a clear "install scraper-for-x[browser] or retry later" message.
+**Fallback (option B), only for gated ops when A fails:** detect failure as an HTTP 404/empty-body from a gated op *after* a successful txid generation (i.e. the header was sent but rejected). Fall back to `StealthySession`: navigate to the op's page (`/search?q=…&f=live`, `/<handle>/with_replies`), capture the organic GraphQL response via `capture_xhr`, hand the *same* body to `parse.walk_instructions`. This reuses the fb-style browser-observe path and the shared parser. Gate B behind the `[browser]` extra; if it's not installed, fail with a clear "install agentic-x[browser] or retry later" message.
 
 **Phase-2 gate (critical):** the FIRST implementation step for txid is a throwaway spike — generate one txid in Python and fire ONE `SearchTimeline` → expect HTTP 200 + parseable body. **If that spike can't be made to 200 within a bounded time-box, flip search/replies to B-primary** and file A as a follow-up. Do not sink days into reproducing X's generator.
 
@@ -118,13 +118,13 @@ The v0.3.0 goal is **not** "rebuild" — it is **unblock the walled ops and wide
 
 | Command | Op | txid? | Notes |
 |---|---|---|---|
-| `scrape-x feed` | `HomeTimeline` | no | **new.** `--limit`, `--format`, cursor pagination. The literal "home feed." |
-| `scrape-x fetch <id>` | `UserTweets` | no | unchanged. |
-| `scrape-x fetch <id> --replies` | `UserTweetsAndReplies` | **yes** | **unblocked.** |
-| `scrape-x search <q>` | `SearchTimeline` | **yes** | **unblocked.** `--product latest\|top`, `--since/--until`. |
-| `scrape-x tweet <id> [--replies]` | `TweetDetail` | no | unchanged; deeper thread pagination already supported. |
-| `scrape-x following <id>` / `followers <id>` | `Following`/`Followers` | probe | **new**, User-list output. |
-| `scrape-x likers <tweetid>` / `retweeters <tweetid>` | `Favoriters`/`Retweeters` | probe | **new**, User-list output. |
+| `agentic-x feed` | `HomeTimeline` | no | **new.** `--limit`, `--format`, cursor pagination. The literal "home feed." |
+| `agentic-x fetch <id>` | `UserTweets` | no | unchanged. |
+| `agentic-x fetch <id> --replies` | `UserTweetsAndReplies` | **yes** | **unblocked.** |
+| `agentic-x search <q>` | `SearchTimeline` | **yes** | **unblocked.** `--product latest\|top`, `--since/--until`. |
+| `agentic-x tweet <id> [--replies]` | `TweetDetail` | no | unchanged; deeper thread pagination already supported. |
+| `agentic-x following <id>` / `followers <id>` | `Following`/`Followers` | probe | **new**, User-list output. |
+| `agentic-x likers <tweetid>` / `retweeters <tweetid>` | `Favoriters`/`Retweeters` | probe | **new**, User-list output. |
 
 Keep every command a **single-target primitive**. The skill chains them (e.g. `feed` → for each author `fetch` → `followers`).
 
@@ -160,11 +160,11 @@ Keep every command a **single-target primitive**. The skill chains them (e.g. `f
 ## 10. Phased implementation (each phase has a verify gate — loop until it passes)
 
 - **Phase 0 — re-verify live (query-ids rotate).** Re-capture fresh query-ids (`scratch/recon_login.py`), re-run the txid-wall probe (`scratch/recon_probe.py`), and **probe the social-graph ops' query-ids + txid-gating** (unprobed this session). Update `queryids.DEFAULT_QUERY_IDS` + `gql` builders from the capture. **Gate:** fresh query-ids in hand; per-op gating table confirmed for today.
-- **Phase 1 — home feed (`feed`).** Zero txid, parser reuse. Add envelope root + `home_timeline_variables` + `fetch_home` + `feed` subcommand + fixture/test. **Gate:** `scrape-x feed --limit 20` writes ≥1 tweet; parity test green. *(Cheapest win — do it first to lock the "add a surface" pattern.)*
+- **Phase 1 — home feed (`feed`).** Zero txid, parser reuse. Add envelope root + `home_timeline_variables` + `fetch_home` + `feed` subcommand + fixture/test. **Gate:** `agentic-x feed --limit 20` writes ≥1 tweet; parity test green. *(Cheapest win — do it first to lock the "add a surface" pattern.)*
 - **Phase 2 — txid core (`transaction.py`).** Spike first (§4 gate): generate one txid → one `SearchTimeline` 200. Then build the module + `ReadClient` wiring + unit test. **Gate:** spike 200s (or decision recorded to go B-primary); unit test green.
-- **Phase 3 — unblock `search` + `fetch --replies`.** Remove the two `FeatureNotImplementedError` raises; wire txid; invert the CLI contract tests; add B fallback behind `[browser]`. **Gate:** `scrape-x search news --limit 20` and `scrape-x fetch <id> --replies --limit 20` both return tweets; fallback path exercised at least once.
+- **Phase 3 — unblock `search` + `fetch --replies`.** Remove the two `FeatureNotImplementedError` raises; wire txid; invert the CLI contract tests; add B fallback behind `[browser]`. **Gate:** `agentic-x search news --limit 20` and `agentic-x fetch <id> --replies --limit 20` both return tweets; fallback path exercised at least once.
 - **Phase 4 — social graph.** `walk_user_instructions` + User-list output + `following`/`followers`/`likers`/`retweeters` + `schema` update + fixtures. **Gate:** each returns ≥1 `User`; schema describes the user output.
-- **Phase 5 — reposition + polish.** README/wiki/CHANGELOG (D4), `--version` → 0.3.0, enrich `--help`. **Gate:** `scrape-x --version` = 0.3.0; docs describe txid + fallback + new commands honestly (incl. fragility).
+- **Phase 5 — reposition + polish.** README/wiki/CHANGELOG (D4), `--version` → 0.3.0, enrich `--help`. **Gate:** `agentic-x --version` = 0.3.0; docs describe txid + fallback + new commands honestly (incl. fragility).
 - **Phase 6 — the `x-fetch` skill (separate session, post-PyPI).** Installs the published package, drives the primitives, does multi-hop navigation. Not in this repo's v0.3.0 scope.
 
 ---

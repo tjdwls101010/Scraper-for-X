@@ -4,13 +4,13 @@ This page covers login profiles, where things are stored on disk, and the pacing
 
 ## Login profiles
 
-A "profile" is a persisted, logged-in X session — cookies (`auth_token`/`ct0`) and a user-agent, harvested once via `scrape-x login` (or imported via `--cookies`) and saved to disk. Every command that touches a session takes `--profile NAME`:
+A "profile" is a persisted, logged-in X session — cookies (`auth_token`/`ct0`) and a user-agent, harvested once via `agentic-x login` (or imported via `--cookies`) and saved to disk. Every command that touches a session takes `--profile NAME`:
 
 ```bash
-scrape-x login   --profile work
-scrape-x status  --profile work
-scrape-x doctor  --profile work
-scrape-x fetch   --profile work someuser
+agentic-x login   --profile work
+agentic-x status  --profile work
+agentic-x doctor  --profile work
+agentic-x fetch   --profile work someuser
 ```
 
 If you don't pass `--profile`, everything uses a profile named `default`. You only need more than one profile if you're maintaining sessions for more than one X account.
@@ -18,12 +18,12 @@ If you don't pass `--profile`, everything uses a profile named `default`. You on
 Profiles are stored under a platformdirs-managed data directory, one subdirectory per name. On macOS that's:
 
 ```
-~/Library/Application Support/scraper-for-x/profiles/<name>/session.json
+~/Library/Application Support/agentic-x/profiles/<name>/session.json
 ```
 
 The session credential itself is a single JSON file (`session.json`) inside the profile directory, holding `auth_token`, `ct0`, the user-agent, and whatever query-ids/features were harvested at login time. The profile *directory* is created at `0700` (owner read/write/execute only), and the `session.json` file inside it is additionally hardened to `0600`. That file **is** an authenticated X session with no password attached — anyone who can read it can act as your account. Read [DISCLAIMER.md](../../DISCLAIMER.md) before you back it up, sync it, or copy it anywhere.
 
-If you log in with a real browser (`scrape-x login`, no `--cookies`), the stealth browser's own persistent context is stored alongside the credential, at `<profile-dir>/browser/` — nested under the same `0700` tree rather than a separate location.
+If you log in with a real browser (`agentic-x login`, no `--cookies`), the stealth browser's own persistent context is stored alongside the credential, at `<profile-dir>/browser/` — nested under the same `0700` tree rather than a separate location.
 
 ## Overriding where profiles live: `--profile-dir` and `SFX_PROFILE_DIR`
 
@@ -36,13 +36,13 @@ The precedence, exactly (from `config.profile_dir`):
 
 1. `--profile-dir PATH`, if given, always wins.
 2. Otherwise, the `SFX_PROFILE_DIR` environment variable, if set.
-3. Otherwise, the platformdirs default (`.../scraper-for-x/profiles/`).
+3. Otherwise, the platformdirs default (`.../agentic-x/profiles/`).
 
 Whichever root is in effect, the actual profile still lives at `<root>/<name>`, so `--profile` and `--profile-dir`/`SFX_PROFILE_DIR` compose normally:
 
 ```bash
 export SFX_PROFILE_DIR=/Volumes/secure/x-profiles
-scrape-x login --profile work
+agentic-x login --profile work
 # -> session stored at /Volumes/secure/x-profiles/work/session.json
 ```
 
@@ -51,7 +51,7 @@ A `--profile-dir` passed on the command line overrides `SFX_PROFILE_DIR` for tha
 The same override is available from the Python API as the `profile_dir` keyword on `XScraper(...)`:
 
 ```python
-from scraper_for_x import XScraper
+from agentic_x import XScraper
 
 with XScraper("work", profile_dir="/Volumes/secure/x-profiles") as x:
     tweets = x.fetch_user_tweets("nasa", limit=50)
@@ -62,14 +62,14 @@ with XScraper("work", profile_dir="/Volumes/secure/x-profiles") as x:
 Separately from login profiles, this tool keeps its own **Chromium install** isolated from every other Playwright-based tool on your machine, via `config.browsers_dir()`:
 
 ```
-~/Library/Application Support/scraper-for-x/browsers/
+~/Library/Application Support/agentic-x/browsers/
 ```
 
-`scrape-x setup` installs Chromium into that path (by shelling out to scrapling's install mechanism with `PLAYWRIGHT_BROWSERS_PATH` pointed at it); `scrape-x login` reads from it whenever it launches the stealth browser.
+`agentic-x setup` installs Chromium into that path (by shelling out to scrapling's install mechanism with `PLAYWRIGHT_BROWSERS_PATH` pointed at it); `agentic-x login` reads from it whenever it launches the stealth browser.
 
-This isolation is deliberate: Playwright and patchright pin exact browser build versions, and different tools on your system can easily want different versions of the same browser. Sharing a cache means one tool's install can silently break another's. Keeping `scraper-for-x`'s Chromium in its own directory means this tool never touches, and is never touched by, anyone else's Playwright browser cache.
+This isolation is deliberate: Playwright and patchright pin exact browser build versions, and different tools on your system can easily want different versions of the same browser. Sharing a cache means one tool's install can silently break another's. Keeping `agentic-x`'s Chromium in its own directory means this tool never touches, and is never touched by, anyone else's Playwright browser cache.
 
-There's no flag or environment variable for this path — it's not user-configurable. `scrape-x setup --force` reinstalls into it if it ever needs to be redone.
+There's no flag or environment variable for this path — it's not user-configurable. `agentic-x setup --force` reinstalls into it if it ever needs to be redone.
 
 ## The non-bypassable pacing floor: `MIN_REQUEST_PAUSE_SECONDS`
 
@@ -84,7 +84,7 @@ MIN_REQUEST_PAUSE_SECONDS = 0.5
 Passing something at or below the floor doesn't error; it gets silently raised, with a note on stderr telling you what actually got used:
 
 ```
-scrape-x: --min-request-pause 0.0 raised to 0.5 (minimum is 0.5s)
+agentic-x: --min-request-pause 0.0 raised to 0.5 (minimum is 0.5s)
 ```
 
 This applies no matter how the value arrives — there is no flag, environment variable, or config file that disables it. As the source comment puts it, zero-delay reads are "both the most ban-inducing setting and the thing that makes this a mass-scraping tool rather than a personal one." It's a per-process floor on how fast *this tool* fires requests — not a rate-limiting ceiling, ban-avoidance guarantee, or a substitute for respecting X's own rate limits (which still apply and still return HTTP 429 regardless of your pacing).
@@ -92,7 +92,7 @@ This applies no matter how the value arrives — there is no flag, environment v
 **There is no `--min-request-pause` or `--max-requests` CLI flag.** Pacing and per-run request budget are configurable only from the Python API, as keyword arguments to `XScraper`:
 
 ```python
-from scraper_for_x import XScraper
+from agentic_x import XScraper
 
 with XScraper("default", min_request_pause=1.5, max_requests=200) as x:
     tweets = x.fetch_user_tweets("nasa", limit=100)
@@ -114,7 +114,7 @@ Separately, each read command's own pagination loop (in `retrieve.py`) tracks it
 These **are** CLI flags (also available as `wait_on_limit`/`max_wait` kwargs on every `XScraper` read method). When X returns HTTP 429, the default behavior is to stop the run with `stop_reason="rate_limited"` (exit code 3). Passing `--wait-on-limit` instead sleeps until the rate-limit window resets (per X's own `x-rate-limit-reset` header) and then continues the same run:
 
 ```bash
-scrape-x fetch nasa --limit 200 --wait-on-limit --max-wait 300
+agentic-x fetch nasa --limit 200 --wait-on-limit --max-wait 300
 ```
 
 `--max-wait SECONDS` caps how long a single wait is allowed to run before giving up and stopping anyway — without it, the wait is however long X's own reset window says. Without `--wait-on-limit` at all, `--max-wait` has no effect: a plain 429 always stops the run immediately.
@@ -124,7 +124,7 @@ scrape-x fetch nasa --limit 200 --wait-on-limit --max-wait 300
 Read commands write their results to a file — never to stdout, and never to your current directory by default. The default path comes from `config.default_output_dir()`:
 
 ```
-~/Library/Application Support/scraper-for-x/output/<identifier>-<timestamp>.<ext>
+~/Library/Application Support/agentic-x/output/<identifier>-<timestamp>.<ext>
 ```
 
 (`<identifier>` is the sanitized handle/id/query you passed in; `<ext>` is `json` or `ndjson` depending on `--format`.) This default is deliberate: captured tweets carry other people's handles, names, and tweet text (see [DISCLAIMER.md](../../DISCLAIMER.md)), and a default that lands outside any git-tracked path makes it harder to accidentally commit someone else's data.
@@ -132,7 +132,7 @@ Read commands write their results to a file — never to stdout, and never to yo
 Pass `--output PATH` to write somewhere else instead:
 
 ```bash
-scrape-x fetch nasa --limit 30 --output ./out.json
+agentic-x fetch nasa --limit 30 --output ./out.json
 ```
 
 `--output` is a plain path override — it doesn't change where profiles or the browser cache live, only where the fetched tweets get written. Whatever directory you point it at, you're responsible for keeping that file as secure as its contents warrant.

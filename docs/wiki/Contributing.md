@@ -5,14 +5,14 @@ Thanks for considering it. This is a solo-maintained, personal-scale tool, so th
 ## Dev environment setup
 
 ```bash
-git clone https://github.com/tjdwls101010/Scraper-for-X.git
-cd Scraper-for-X
+git clone https://github.com/tjdwls101010/Agentic-X.git
+cd Agentic-X
 uv venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
 pre-commit install
 ```
 
-`.[dev]` pulls in `pytest`, `ruff`, `pre-commit`, and `build` (see `pyproject.toml`'s `[project.optional-dependencies]`). It does **not** install a browser — that's the separate `[browser]` extra (`uv pip install -e ".[browser,dev]"`), which pulls in `scrapling[fetchers]` and is only needed if you're going to run `scrape-x login`/`setup` (see [Installation](Installation.md)) or exercise live integration tests against a real, logged-in session. Everything else (unit tests, lint, the fixture scan) runs against synthetic fixtures and needs no browser at all.
+`.[dev]` pulls in `pytest`, `ruff`, `pre-commit`, and `build` (see `pyproject.toml`'s `[project.optional-dependencies]`). It does **not** install a browser — that's the separate `[browser]` extra (`uv pip install -e ".[browser,dev]"`), which pulls in `scrapling[fetchers]` and is only needed if you're going to run `agentic-x login`/`setup` (see [Installation](Installation.md)) or exercise live integration tests against a real, logged-in session. Everything else (unit tests, lint, the fixture scan) runs against synthetic fixtures and needs no browser at all.
 
 `pre-commit install` wires up the hooks in `.pre-commit-config.yaml` so lint/format/PII issues get caught locally, before CI does:
 
@@ -53,7 +53,7 @@ If the scan flags something you're confident is a deliberately-fake placeholder 
 
 ## Re-anchoring the parser after an X response-shape change
 
-X's internal GraphQL response shape isn't a stable contract — query-ids rotate and field paths can drift without notice (see `scrape-x doctor --refresh` in the [CLI Reference](CLI-Reference.md)). When a read command starts returning zero results or missing fields on a shape they used to handle, you'll want a real capture to work from: log in with `scrape-x login`, reproduce the call with `--raw` against your own session, and inspect the saved output locally to see what actually changed. Never commit anything captured this way — hand-author a new synthetic fixture (or edit an existing one) in `tests/fixtures/` that reproduces just the shape that broke, the same way the existing fixtures were built; never derive a committed fixture by lightly editing a real capture.
+X's internal GraphQL response shape isn't a stable contract — query-ids rotate and field paths can drift without notice (see `agentic-x doctor --refresh` in the [CLI Reference](CLI-Reference.md)). When a read command starts returning zero results or missing fields on a shape they used to handle, you'll want a real capture to work from: log in with `agentic-x login`, reproduce the call with `--raw` against your own session, and inspect the saved output locally to see what actually changed. Never commit anything captured this way — hand-author a new synthetic fixture (or edit an existing one) in `tests/fixtures/` that reproduces just the shape that broke, the same way the existing fixtures were built; never derive a committed fixture by lightly editing a real capture.
 
 ## CI
 
@@ -65,7 +65,7 @@ Every push to `main` and every pull request runs `.github/workflows/ci.yml`, on 
 4. `python scripts/check_fixtures_pii.py`
 5. `pytest`
 
-A separate `build-and-smoke` job (same OS matrix) builds a wheel, installs it into a clean venv, and runs `scrape-x --version` / `scrape-x --help` against it — catching a broken entry point or import error that the fixture-based tests above can't see.
+A separate `build-and-smoke` job (same OS matrix) builds a wheel, installs it into a clean venv, and runs `agentic-x --version` / `agentic-x --help` against it — catching a broken entry point or import error that the fixture-based tests above can't see.
 
 Nothing in CI touches a live X session; nothing in CI can, since there's no logged-in profile available there.
 

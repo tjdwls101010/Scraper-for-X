@@ -79,14 +79,14 @@ def observe(
             response = browser.fetch(url, page_action=_settle, timeout=60000)
     except ImportError as exc:  # scrapling absent
         raise BrowserFallbackError(
-            "the browser fallback needs the [browser] extra: pip install 'scraper-for-x[browser]'"
+            "the browser fallback needs the [browser] extra: pip install 'agentic-x[browser]'"
         ) from exc
 
     body = pick_body(response.captured_xhr, operation)
     if body is None:
         raise BrowserFallbackError(
             f"the browser loaded {url} but never captured a {operation} response "
-            "(the session may be logged out in the browser profile -- try: scrape-x login)"
+            "(the session may be logged out in the browser profile -- try: agentic-x login)"
         )
     return body
 

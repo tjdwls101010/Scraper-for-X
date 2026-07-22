@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from scraper_for_x.auth import parse_cookie_file, validate_token_shapes
-from scraper_for_x.errors import InvalidCookieError
+from agentic_x.auth import parse_cookie_file, validate_token_shapes
+from agentic_x.errors import InvalidCookieError
 
 AUTH_TOKEN = "a" * 40
 CT0 = "b" * 64

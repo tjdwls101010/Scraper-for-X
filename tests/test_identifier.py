@@ -1,7 +1,7 @@
 import pytest
 
-from scraper_for_x.auth import normalize_identifier, normalize_tweet_identifier
-from scraper_for_x.errors import InvalidIdentifierError
+from agentic_x.auth import normalize_identifier, normalize_tweet_identifier
+from agentic_x.errors import InvalidIdentifierError
 
 
 def test_bare_all_digit_token_defaults_to_id():
@@ -127,7 +127,7 @@ def test_rejects_handle_with_invalid_characters():
 
 
 def test_tweet_identifier_bare_numeric_id():
-    """Regression guard: `scrape-x tweet 123456789` (a bare numeric tweet id,
+    """Regression guard: `agentic-x tweet 123456789` (a bare numeric tweet id,
     exactly what --help documents as accepted) must actually work -- it
     previously always failed because normalize_identifier defaults a bare
     digit string to a *user* id (kind "id"), not a tweet id."""

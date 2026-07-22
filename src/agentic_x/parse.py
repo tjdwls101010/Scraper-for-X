@@ -11,7 +11,7 @@ body per call and hands raw ``tweet_results.result`` dicts onward.
 
 from __future__ import annotations
 
-from .errors import ScraperForXError
+from .errors import AgenticXError
 
 # Per-op path to the instructions[] list, pinned exactly per plan §8's
 # "Per-op envelope roots" subsection.
@@ -33,7 +33,7 @@ ENVELOPE_ROOTS: dict[str, tuple[str, ...]] = {
 }
 
 
-class EnvelopeParseError(ScraperForXError):
+class EnvelopeParseError(AgenticXError):
     """``instructions[]`` could not be located at all for this operation.
 
     Distinct from an empty-but-valid page (zero tweet entries): this is a
@@ -43,11 +43,11 @@ class EnvelopeParseError(ScraperForXError):
     ``walk_instructions`` without this exception means "parsed fine, nothing
     there," which is exit 0, not exit 4.
 
-    Subclasses ``ScraperForXError`` (not just ``Exception``) and is re-exported
+    Subclasses ``AgenticXError`` (not just ``Exception``) and is re-exported
     from the package root, so a library caller doing
-    ``except ScraperForXError:`` around ``XScraper`` reads -- the documented
+    ``except AgenticXError:`` around ``XScraper`` reads -- the documented
     pattern (see ``errors.py``'s module docstring) -- actually catches this,
-    rather than needing to reach into the private ``scraper_for_x.parse``
+    rather than needing to reach into the private ``agentic_x.parse``
     submodule.
     """
 

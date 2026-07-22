@@ -6,7 +6,7 @@ footprints on purpose:
 - ``run_login``/``run_setup`` launch a real (stealth) browser and therefore
   import ``scrapling`` -- but only *inside* those functions, lazily, never at
   module top level (plan §14 G-lazy-import). A base install (no ``[browser]``
-  extra) must still be able to ``import scraper_for_x`` and use the
+  extra) must still be able to ``import agentic_x`` and use the
   cookie-import path; a top-level ``import scrapling`` here would break that.
 - ``run_status``/``run_doctor``/``check_session_status`` are a "cheap
   authenticated read" over the *httpx* read client (plan §7) -- they import
@@ -86,7 +86,7 @@ def query_ids_for(credential: auth.SessionCredential) -> tuple[dict, dict]:
 def check_session_status(read_client: client.ReadClient, query_ids: dict, features: dict) -> Status:
     """Make one cheap authenticated read and classify the session (plan §7).
 
-    Shared by ``scrape-x status``/``doctor`` and ``retrieve.py``'s pre-exit-4
+    Shared by ``agentic-x status``/``doctor`` and ``retrieve.py``'s pre-exit-4
     soft-lock probe (§11), so all three agree on what "logged in" means.
     """
     query_id = query_ids.get("UserByScreenName", queryids.DEFAULT_QUERY_IDS["UserByScreenName"])
@@ -142,7 +142,7 @@ def run_doctor(
     try:
         status = check_session_status(read_client, query_ids, features)
         if status is not Status.LOGGED_IN:
-            return False, f"session check failed: {status.value} (run `scrape-x login`)"
+            return False, f"session check failed: {status.value} (run `agentic-x login`)"
 
         message = "OK - authenticated round-trip succeeded"
         if refresh:
@@ -265,7 +265,7 @@ def run_setup(*, force: bool = False) -> None:
 
     Shells out to scrapling's own install mechanism rather than importing
     scrapling in-process (keeps this function's failure mode -- "scrapling
-    not installed, run `pip install scraper-for-x[browser]`" -- a clean
+    not installed, run `pip install agentic-x[browser]`" -- a clean
     ImportError at the call site, mirroring the FB sibling's ``run_setup``).
     """
     config.browsers_dir().mkdir(parents=True, exist_ok=True)

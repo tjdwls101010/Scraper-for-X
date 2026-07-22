@@ -1,6 +1,6 @@
 # Pinned dev/CI dependency snapshot for reproducible CI runs (plan §14).
 # NOT the published package's dependency spec — that lives in pyproject.toml.
-# Regenerate with: uv pip freeze --python .venv/bin/python | grep -v '^scraper\|^-e '
+# Regenerate with: uv pip freeze --python .venv/bin/python | grep -v '^agentic\|^-e '
 #
 # Deliberately does NOT include scrapling: the base install (and this repo's
 # CI lint-and-test job) never needs it -- only the wheel-install smoke test's

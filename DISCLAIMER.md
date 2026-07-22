@@ -12,7 +12,7 @@ X Corp has pursued scraping-related litigation (e.g. *X Corp v. Bright Data*), b
 
 ## 3. Publishing this tool exposes its maintainer, not just its users
 
-This package is named `scraper-for-x`, published under a real GitHub identity, and distributed via PyPI Trusted Publishing, which binds each release to a named GitHub repository and account (`tjdwls101010/Scraper-for-X`). That is a deliberate, informed choice by the maintainer — but it means the maintainer is identifiable in a way an anonymous or unpublished tool would not be. This exposure exists regardless of how the tool is actually used by others, and is recorded here so the choice stays informed.
+This package is named `agentic-x`, published under a real GitHub identity, and distributed via PyPI Trusted Publishing, which binds each release to a named GitHub repository and account (`tjdwls101010/Agentic-X`). That is a deliberate, informed choice by the maintainer — but it means the maintainer is identifiable in a way an anonymous or unpublished tool would not be. This exposure exists regardless of how the tool is actually used by others, and is recorded here so the choice stays informed.
 
 ## 4. You may become a "data controller" for other people's data
 
@@ -38,12 +38,12 @@ Don't commit scraped output to a public (or even private) git repository, and do
 Automating an X account — even just reading, via a real logged-in session — violates X's Terms of Service and X is aggressive about flagging automation. To reduce (not eliminate) the risk of a suspension or challenge:
 - Use a **dedicated or throwaway account**, never your primary one.
 - Keep volume low: shallow, recent fetches are safer than deep archival pulls. Deeper `--since`/`--limit` runs make more requests and raise both rate-limit and account-flag risk.
-- Run `scrape-x` from the **same network/IP** where the session was originally established (`scrape-x login`, or wherever you exported cookies from). An abrupt IP or client change against an existing session — especially pairing a cookie-imported session with a datacenter/VPN IP — is exactly the kind of signal X's abuse systems weight, and can soft-lock the session even without an outright ban.
+- Run `agentic-x` from the **same network/IP** where the session was originally established (`agentic-x login`, or wherever you exported cookies from). An abrupt IP or client change against an existing session — especially pairing a cookie-imported session with a datacenter/VPN IP — is exactly the kind of signal X's abuse systems weight, and can soft-lock the session even without an outright ban.
 - Never run this in a loop or scheduler; there is no built-in scheduler/daemon, and none will be added.
 
 ## 8. Your session credential is a live, password-less login — protect it
 
-`scrape-x login` (or cookie import) persists your X session as `{auth_token, ct0, user-agent}` to a directory on disk, permissioned `0700` with the credential file itself `0600`. Anyone who can read that file has authenticated, password-less access to your X account — no password or 2FA required, because the session already satisfied both. Concretely:
+`agentic-x login` (or cookie import) persists your X session as `{auth_token, ct0, user-agent}` to a directory on disk, permissioned `0700` with the credential file itself `0600`. Anyone who can read that file has authenticated, password-less access to your X account — no password or 2FA required, because the session already satisfied both. Concretely:
 - **Do not** back this up to Time Machine, sync it via iCloud/Dropbox, or commit it anywhere.
 - If you import cookies from an exported file, that source file *also* still contains a live session after import — delete or secure it; this tool never deletes it for you.
 - If the machine or disk is lost or compromised, **revoke the session immediately** by logging out of that session on x.com (Settings → Security and account access → Apps and sessions, or equivalent), not just by deleting the local directory.

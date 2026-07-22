@@ -9,7 +9,7 @@ actually called.
 
 from __future__ import annotations
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 from collections.abc import Iterator
 from datetime import UTC, date, datetime
@@ -21,6 +21,7 @@ from . import retrieve as retrieve_module
 from . import session as session_module
 from .config import DEFAULT_PROFILE_NAME
 from .errors import (
+    AgenticXError,
     BrowserFallbackError,
     FeatureNotImplementedError,
     GatedOpRejectedError,
@@ -31,7 +32,6 @@ from .errors import (
     NotFoundError,
     ProfileUnavailableError,
     RateLimitedError,
-    ScraperForXError,
     SessionClosedError,
     SessionExpiredError,
     TransactionIdError,
@@ -48,7 +48,7 @@ __all__ = [
     "Media",
     "Status",
     "RetrieveResult",
-    "ScraperForXError",
+    "AgenticXError",
     "LoginRequiredError",
     "SessionExpiredError",
     "RateLimitedError",

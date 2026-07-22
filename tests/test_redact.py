@@ -1,4 +1,4 @@
-from scraper_for_x import redact
+from agentic_x import redact
 
 
 def test_sensitive_keys_dropped_entirely():

@@ -1,6 +1,6 @@
 # Quick Start
 
-This page walks through the whole flow once, slowly, with real terminal output at each step. If you just want the condensed version, see the [main README](../../README.md#quick-start). If you haven't installed the tool yet, start with [Installation](Installation.md) instead — this page assumes `scrape-x` is already on your PATH.
+This page walks through the whole flow once, slowly, with real terminal output at each step. If you just want the condensed version, see the [main README](../../README.md#quick-start). If you haven't installed the tool yet, start with [Installation](Installation.md) instead — this page assumes `agentic-x` is already on your PATH.
 
 Before any of this: **read [DISCLAIMER.md](../../DISCLAIMER.md).** This automates a read-only session against X/Twitter's Terms of Service, and it's worth knowing what that means before you log anything in.
 
@@ -10,10 +10,10 @@ Four steps: `login` → `status` → a read command → look at the output.
 
 Two ways to get a session on disk. Pick one.
 
-**Headed stealth browser (needs the `[browser]` extra: `pip install "scraper-for-x[browser]"`):**
+**Headed stealth browser (needs the `[browser]` extra: `pip install "agentic-x[browser]"`):**
 
 ```bash
-$ scrape-x login
+$ agentic-x login
 ```
 
 ```
@@ -22,24 +22,24 @@ A browser window should now be open. Log in to X there, then press Enter here to
 
 A real, visible Chromium window opens. Log in exactly like you would in any browser — type your credentials, clear 2FA, solve a captcha if X throws one at you. Nothing about this step is automated on purpose. Once you're looking at your home timeline in that window, go back to the terminal and press Enter.
 
-`scrape-x` then reads back the `auth_token`/`ct0` cookies from that browser session. If both are present, it saves them:
+`agentic-x` then reads back the `auth_token`/`ct0` cookies from that browser session. If both are present, it saves them:
 
 ```
 Logged in. Profile saved: 'default'
 ```
 
-If it can't find them (you pressed Enter before finishing login, or the window closed early), it says so and exits 1 — just run `scrape-x login` again, it's idempotent.
+If it can't find them (you pressed Enter before finishing login, or the window closed early), it says so and exits 1 — just run `agentic-x login` again, it's idempotent.
 
 **Cookie import (no browser, works on the base install):**
 
 If you already have a logged-in X session in a real browser, export its cookies (a devtools "copy as JSON" cookie list, a Netscape cookie file, or a raw `Cookie:` header paste all work) and import that file directly:
 
 ```bash
-$ scrape-x login --cookies export.txt
+$ agentic-x login --cookies export.txt
 ```
 
 ```
-scrape-x: export.txt still contains a live, password-less X session — delete or secure it now that it has been imported
+agentic-x: export.txt still contains a live, password-less X session — delete or secure it now that it has been imported
 Cookie import succeeded. Profile saved: 'default'
 ```
 
@@ -50,40 +50,40 @@ Either way, what got saved is `auth_token` + `ct0` + a user-agent string, as a s
 ## 2. Check your session: `status`
 
 ```bash
-$ scrape-x status
+$ agentic-x status
 ```
 
 ```
 status: logged_in
 ```
 
-`status` loads the persisted session and makes one cheap authenticated GraphQL read, then classifies the result as `logged_in`, `expired` (exit 2 — run `scrape-x login` again), or `rate_limited` (exit 3). Add `--json` for a script-friendly line:
+`status` loads the persisted session and makes one cheap authenticated GraphQL read, then classifies the result as `logged_in`, `expired` (exit 2 — run `agentic-x login` again), or `rate_limited` (exit 3). Add `--json` for a script-friendly line:
 
 ```bash
-$ scrape-x status --json
+$ agentic-x status --json
 ```
 
 ```json
 {"status": "logged_in"}
 ```
 
-If something's not working and you want a deeper check (does query-id-dependent parsing still work, not just "is the cookie accepted"), reach for `scrape-x doctor` instead — see [CLI Reference](CLI-Reference.md) for what it checks and what `--refresh` does.
+If something's not working and you want a deeper check (does query-id-dependent parsing still work, not just "is the cookie accepted"), reach for `agentic-x doctor` instead — see [CLI Reference](CLI-Reference.md) for what it checks and what `--refresh` does.
 
 ## 3. Your first fetch
 
 Pull a profile's tweets:
 
 ```bash
-$ scrape-x fetch nasa --limit 50 --format json
+$ agentic-x fetch nasa --limit 50 --format json
 ```
 
 ```
-50 tweets, range 2026-05-02..2026-07-04, stop reason: limit_reached. Saved to /Users/you/Library/Application Support/scraper-for-x/output/nasa-20260705T031813123456Z.json
+50 tweets, range 2026-05-02..2026-07-04, stop reason: limit_reached. Saved to /Users/you/Library/Application Support/agentic-x/output/nasa-20260705T031813123456Z.json
 ```
 
 `nasa` here can be a bare username, `@nasa`, a numeric user id (pass `--by id` if a bare numeric string should be read as a screen name instead — otherwise an all-digit token is assumed to be an id), or a full profile URL like `https://x.com/nasa`. `--since 2026-06-01`/`--until 2026-06-30` bound the date range, `--wait-on-limit` (optionally with `--max-wait SECONDS`) sleeps out a rate-limit instead of stopping, and `--format ndjson` gives one JSON object per line instead of a single array. `--replies` reads the profile's tweets *and* replies — a different X operation, and one of three that depend on a [generated transaction id](Transaction-ID.md), so it is the least reliable flag here.
 
-Notice where the file landed: **not** your current directory, and not stdout. By default, output goes under this tool's own per-user data directory (via [`platformdirs`](https://pypi.org/project/platformdirs/) — on macOS, `~/Library/Application Support/scraper-for-x/output/`), named `<identifier>-<UTC timestamp>.json`. That's deliberate: captured tweets contain other people's names, text, and media URLs (real third-party personal data — see [../DISCLAIMER.md §4–5](../../DISCLAIMER.md)), and a default that lands quietly in your current directory is a default that eventually gets `git add`ed by accident. Pass `--output some/path.json` if you want it somewhere specific.
+Notice where the file landed: **not** your current directory, and not stdout. By default, output goes under this tool's own per-user data directory (via [`platformdirs`](https://pypi.org/project/platformdirs/) — on macOS, `~/Library/Application Support/agentic-x/output/`), named `<identifier>-<UTC timestamp>.json`. That's deliberate: captured tweets contain other people's names, text, and media URLs (real third-party personal data — see [../DISCLAIMER.md §4–5](../../DISCLAIMER.md)), and a default that lands quietly in your current directory is a default that eventually gets `git add`ed by accident. Pass `--output some/path.json` if you want it somewhere specific.
 
 The one-line summary on stderr always tells you three things, so a partial run is never mistaken for a complete one: **how many tweets** were retrieved, the **date range** actually observed (oldest..newest), and the **stop reason** — why the fetch stopped (`limit_reached` here, because `--limit 50` was hit). **Read it — several stop reasons mean "partial" while still exiting 0**, notably `empty_pages` and `browser_observed`. The full table is in the [CLI Reference](CLI-Reference.md#stop-reasons).
 
@@ -92,17 +92,17 @@ The one-line summary on stderr always tells you three things, so a partial run i
 The shortest command in the tool, because it takes no target at all — the feed belongs to your session:
 
 ```bash
-$ scrape-x feed --limit 20
+$ agentic-x feed --limit 20
 ```
 
 ```
-20 tweets, range 2026-07-19..2026-07-20, stop reason: limit_reached. Saved to /Users/you/Library/Application Support/scraper-for-x/output/home-20260720T133040191608Z.json
+20 tweets, range 2026-07-19..2026-07-20, stop reason: limit_reached. Saved to /Users/you/Library/Application Support/agentic-x/output/home-20260720T133040191608Z.json
 ```
 
 ### Search
 
 ```bash
-$ scrape-x search "artemis" --limit 20 --product latest
+$ agentic-x search "artemis" --limit 20 --product latest
 ```
 
 Anything X's own search box accepts works here — `from:`, `since:`, `-filter:replies`, quoted phrases. `--product top` switches from chronological to X's ranking.
@@ -112,7 +112,7 @@ Search is one of three commands that depend on a [generated transaction id](Tran
 ### The social graph
 
 ```bash
-$ scrape-x following nasa --limit 100
+$ agentic-x following nasa --limit 100
 ```
 
 ```
@@ -124,11 +124,11 @@ $ scrape-x following nasa --limit 100
 ### One tweet plus its thread
 
 ```bash
-$ scrape-x tweet https://x.com/nasa/status/1234567890123456789 --replies
+$ agentic-x tweet https://x.com/nasa/status/1234567890123456789 --replies
 ```
 
 ```
-15 tweets, range 2026-07-01..2026-07-01, stop reason: feed_exhausted. Saved to /Users/you/Library/Application Support/scraper-for-x/output/https-x-com-nasa-status-1234567890123456789-20260705T032011789012Z.json
+15 tweets, range 2026-07-01..2026-07-01, stop reason: feed_exhausted. Saved to /Users/you/Library/Application Support/agentic-x/output/https-x-com-nasa-status-1234567890123456789-20260705T032011789012Z.json
 ```
 
 Accepts a full tweet URL or a bare numeric tweet id. Without `--replies` you just get the one tweet; with it, the saved file also includes replies in that conversation thread.
@@ -186,7 +186,7 @@ This page won't repeat the full field list — see [Output Schema](Output-Schema
 The same fetch, from Python instead of shelling out to the CLI:
 
 ```python
-from scraper_for_x import XScraper
+from agentic_x import XScraper
 
 with XScraper(profile="default") as x:
     tweets = x.fetch_user_tweets("nasa", limit=50)
@@ -199,7 +199,7 @@ for tweet in tweets:
 
 ## Exit codes
 
-`scrape-x` returns a specific exit code for each outcome, so scripts can branch without parsing stderr text: `0` success, `2` login needed/expired (run `scrape-x login`), `3` rate-limited, `4` what X served no longer matches what this package expects (query-id drift — run `scrape-x doctor --refresh` — or a [transaction-id failure](Transaction-ID.md)), `5` target unavailable (suspended/protected/doesn't exist), `7` finished without confirming `--since` was actually reached. See [CLI Reference](CLI-Reference.md#exit-codes) for the full table.
+`agentic-x` returns a specific exit code for each outcome, so scripts can branch without parsing stderr text: `0` success, `2` login needed/expired (run `agentic-x login`), `3` rate-limited, `4` what X served no longer matches what this package expects (query-id drift — run `agentic-x doctor --refresh` — or a [transaction-id failure](Transaction-ID.md)), `5` target unavailable (suspended/protected/doesn't exist), `7` finished without confirming `--since` was actually reached. See [CLI Reference](CLI-Reference.md#exit-codes) for the full table.
 
 ## What's next
 

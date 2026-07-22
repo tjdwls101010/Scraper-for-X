@@ -3,27 +3,27 @@
 from __future__ import annotations
 
 
-class ScraperForXError(Exception):
+class AgenticXError(Exception):
     """Base class for every error this package raises."""
 
 
-class LoginRequiredError(ScraperForXError):
+class LoginRequiredError(AgenticXError):
     """No persisted session exists for this profile.
 
-    Fix: ``scrape-x login``.
+    Fix: ``agentic-x login``.
     """
 
 
-class SessionExpiredError(ScraperForXError):
+class SessionExpiredError(AgenticXError):
     """A persisted session exists but X now rejects it or has soft-locked it.
 
     Covers both the explicit case (401 / logged-out marker) and the silent case
     (X returns HTTP 200 with an empty/limited timeline for a stale session).
-    Fix: ``scrape-x login``.
+    Fix: ``agentic-x login``.
     """
 
 
-class RateLimitedError(ScraperForXError):
+class RateLimitedError(AgenticXError):
     """The request hit X's 429 rate limit.
 
     Carries ``reset_at``, the unix epoch from the ``x-rate-limit-reset`` header,
@@ -35,14 +35,14 @@ class RateLimitedError(ScraperForXError):
         self.reset_at = reset_at
 
 
-class ProfileUnavailableError(ScraperForXError):
+class ProfileUnavailableError(AgenticXError):
     """The target user is suspended, protected, or does not exist.
 
     Distinct from :class:`NotFoundError`, which is about tweets, not users.
     """
 
 
-class NotFoundError(ScraperForXError):
+class NotFoundError(AgenticXError):
     """The target tweet or thread does not exist.
 
     Distinct from :class:`ProfileUnavailableError`, which is about users, not
@@ -50,15 +50,15 @@ class NotFoundError(ScraperForXError):
     """
 
 
-class InvalidCookieError(ScraperForXError, ValueError):
+class InvalidCookieError(AgenticXError, ValueError):
     """A cookie-import value did not match the expected ``auth_token``/``ct0`` shape."""
 
 
-class InvalidIdentifierError(ScraperForXError, ValueError):
+class InvalidIdentifierError(AgenticXError, ValueError):
     """The username/id/URL identifier failed normalize-then-validate."""
 
 
-class NotEnteredError(ScraperForXError):
+class NotEnteredError(AgenticXError):
     """A read was attempted on an ``XScraper`` instance that was never entered.
 
     Reads require the context to be open. Use ``with XScraper(...) as x:`` before
@@ -66,7 +66,7 @@ class NotEnteredError(ScraperForXError):
     """
 
 
-class SessionClosedError(ScraperForXError):
+class SessionClosedError(AgenticXError):
     """An ``iter_*`` generator was advanced after its owning ``with`` block exited.
 
     The generator drives the read client; it can only make progress while the
@@ -74,7 +74,7 @@ class SessionClosedError(ScraperForXError):
     """
 
 
-class TransactionIdError(ScraperForXError):
+class TransactionIdError(AgenticXError):
     """A fresh ``x-client-transaction-id`` could not be generated.
 
     The three ops behind X's transaction-id wall (``SearchTimeline``,
@@ -89,7 +89,7 @@ class TransactionIdError(ScraperForXError):
     """
 
 
-class GatedOpRejectedError(ScraperForXError):
+class GatedOpRejectedError(AgenticXError):
     """A transaction-id-gated op rejected the request despite a minted header.
 
     This is the specific signal that the reverse-engineered generator has
@@ -100,7 +100,7 @@ class GatedOpRejectedError(ScraperForXError):
     """
 
 
-class BrowserFallbackError(ScraperForXError):
+class BrowserFallbackError(AgenticXError):
     """The browser-observe fallback could not produce a response.
 
     Covers the ``[browser]`` extra being absent, an op with no known page to
@@ -109,7 +109,7 @@ class BrowserFallbackError(ScraperForXError):
     """
 
 
-class FeatureNotImplementedError(ScraperForXError):
+class FeatureNotImplementedError(AgenticXError):
     """No shipped operation raises this any more; retained for compatibility.
 
     Through v0.2.0 ``search()`` and ``fetch_user_tweets(replies=True)``/

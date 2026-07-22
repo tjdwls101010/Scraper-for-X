@@ -4,7 +4,7 @@ X rotates GraphQL query-ids roughly every 2-4 weeks as an anti-scraping
 measure; a hardcoded id then fails silently or returns an empty parse. This
 module ships a known-good fallback per op and two ways to refresh it:
 
-- ``harvest_from_browser``: called by ``scrape-x login`` with the XHR
+- ``harvest_from_browser``: called by ``agentic-x login`` with the XHR
   requests scrapling captured during the browser session.
 - ``reanchor_via_main_js``: the **browser-free** path (`doctor --refresh` /
   `harvest_queryids.py`) -- fetches x.com's public `main.js` bundle over a
@@ -74,7 +74,7 @@ def harvest_from_browser(captured_requests: list[Any]) -> QueryIdSet:
 
     ``captured_requests`` is whatever ``response.captured_xhr`` handed back
     (a list of scrapling ``Response``-like objects, each with a ``.url``
-    attribute -- see ``scraper_for_facebook.session``/``retrieve`` for the
+    attribute -- see ``agentic_facebook.session``/``retrieve`` for the
     reference shape this mirrors). Any op observed live overrides the
     fallback; any op not seen during this session falls back to
     ``DEFAULT_QUERY_IDS``.

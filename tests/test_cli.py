@@ -1,7 +1,7 @@
 import argparse
 
-from scraper_for_x import cli
-from scraper_for_x.errors import (
+from agentic_x import cli
+from agentic_x.errors import (
     InvalidIdentifierError,
     LoginRequiredError,
     NotFoundError,
@@ -10,7 +10,7 @@ from scraper_for_x.errors import (
     SessionExpiredError,
     TransactionIdError,
 )
-from scraper_for_x.parse import EnvelopeParseError
+from agentic_x.parse import EnvelopeParseError
 
 
 def test_cmd_doctor_handles_unexpected_exception_cleanly(monkeypatch):
@@ -177,7 +177,7 @@ def test_catalog_exits_0_and_is_valid_json(capsys):
     assert cli.main(["catalog"]) == 0
     doc = json.loads(capsys.readouterr().out)
     assert doc["catalog_version"] == cli.CATALOG_VERSION
-    assert doc["command"] == "scrape-x"
+    assert doc["command"] == "agentic-x"
 
 
 def test_catalog_lists_every_subcommand():
@@ -232,7 +232,7 @@ def test_catalog_exit_codes_match_the_real_error_mapping():
 def test_catalog_points_at_the_output_schema_command():
     """The two contracts are complementary: catalog = how to call it,
     schema --json = what comes back."""
-    assert cli.build_catalog()["output_schema"] == "scrape-x schema --json"
+    assert cli.build_catalog()["output_schema"] == "agentic-x schema --json"
 
 
 def test_catalog_accepts_json_flag_for_symmetry(capsys):

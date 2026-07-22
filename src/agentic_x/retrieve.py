@@ -143,7 +143,7 @@ def paginate_iter(
                 if max_wait is not None:
                     wait_seconds = min(wait_seconds, max_wait)
                 print(
-                    f"scrape-x: waiting {int(wait_seconds)}s until rate-limit reset",
+                    f"agentic-x: waiting {int(wait_seconds)}s until rate-limit reset",
                     file=sys.stderr,
                 )
                 time.sleep(wait_seconds)
@@ -647,7 +647,7 @@ def paginate_users(
                 if max_wait is not None:
                     wait_seconds = min(wait_seconds, max_wait)
                 print(
-                    f"scrape-x: waiting {int(wait_seconds)}s until rate-limit reset",
+                    f"agentic-x: waiting {int(wait_seconds)}s until rate-limit reset",
                     file=sys.stderr,
                 )
                 time.sleep(wait_seconds)

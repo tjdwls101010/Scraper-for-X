@@ -12,8 +12,8 @@ import json
 
 import pytest
 
-from scraper_for_x import observe
-from scraper_for_x.errors import BrowserFallbackError
+from agentic_x import observe
+from agentic_x.errors import BrowserFallbackError
 
 
 class _Captured:
