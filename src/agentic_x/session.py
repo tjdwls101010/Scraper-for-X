@@ -265,7 +265,7 @@ def run_setup(*, force: bool = False) -> None:
 
     Shells out to scrapling's own install mechanism rather than importing
     scrapling in-process (keeps this function's failure mode -- "scrapling
-    not installed, run `pip install agentic-x[browser]`" -- a clean
+    not installed, run `pip install agentic-twitter[browser]`" -- a clean
     ImportError at the call site, mirroring the FB sibling's ``run_setup``).
     """
     config.browsers_dir().mkdir(parents=True, exist_ok=True)

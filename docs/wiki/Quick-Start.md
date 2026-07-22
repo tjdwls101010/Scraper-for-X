@@ -10,7 +10,7 @@ Four steps: `login` → `status` → a read command → look at the output.
 
 Two ways to get a session on disk. Pick one.
 
-**Headed stealth browser (needs the `[browser]` extra: `pip install "agentic-x[browser]"`):**
+**Headed stealth browser (needs the `[browser]` extra: `pip install "agentic-twitter[browser]"`):**
 
 ```bash
 $ agentic-x login

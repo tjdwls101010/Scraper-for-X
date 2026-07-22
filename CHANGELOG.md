@@ -13,7 +13,7 @@ Renamed from the old identity (formerly PyPI `scraper-for-x`, import
 `scraper_for_x`, CLI `scrape-x`, repo `Scraper-for-X`) to **Agentic X**.
 Behaviour is unchanged. Breaking: the import path, CLI command, PyPI package
 name, and base exception class (`ScraperForXError` → `AgenticXError`) all
-changed. Install `agentic-x`; the old package is a tombstone pointing here.
+changed. Install `agentic-twitter`; the old package is a tombstone pointing here.
 
 ## [0.3.1] - 2026-07-20
 
