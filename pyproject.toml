@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "scraper-for-x"
-version = "0.3.1"
+name = "agentic-x"
+version = "0.4.0"
 description = "Read-only scraping of logged-in X/Twitter data via a harvest-then-replay hybrid: a stealth-browser login harvests the session once, then reads are replayed over httpx. No client-transaction-id replay."
 readme = "README.md"
 license = "MIT"
@@ -38,7 +38,7 @@ dev = [
     "ruff>=0.8",
     "pre-commit>=3.8",
     "build>=1.2",
-    # Semantically validates `scrape-x schema --json` output (a valid draft
+    # Semantically validates `agentic-x schema --json` output (a valid draft
     # 2020-12 schema) and that real fixture tweets conform to it -- the delegated
     # contract the x-fetch skill reads. A declared dev dep so the test runs in CI
     # instead of being importorskip'd away (see tests/test_model.py).
@@ -46,15 +46,15 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/tjdwls101010/Scraper-for-X"
-Issues = "https://github.com/tjdwls101010/Scraper-for-X/issues"
-Changelog = "https://github.com/tjdwls101010/Scraper-for-X/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/tjdwls101010/Agentic-X"
+Issues = "https://github.com/tjdwls101010/Agentic-X/issues"
+Changelog = "https://github.com/tjdwls101010/Agentic-X/blob/main/CHANGELOG.md"
 
 [project.scripts]
-scrape-x = "scraper_for_x.cli:main"
+agentic-x = "agentic_x.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/scraper_for_x"]
+packages = ["src/agentic_x"]
 
 [tool.ruff]
 line-length = 100

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import platformdirs
 
-APP_NAME = "scraper-for-x"
+APP_NAME = "agentic-x"
 
 DEFAULT_PROFILE_NAME = "default"
 
@@ -70,7 +70,7 @@ def clamp_request_pause(min_s: float) -> float:
     """
     if min_s <= MIN_REQUEST_PAUSE_SECONDS:
         print(
-            f"scrape-x: --min-request-pause {min_s} raised to {MIN_REQUEST_PAUSE_SECONDS} "
+            f"agentic-x: --min-request-pause {min_s} raised to {MIN_REQUEST_PAUSE_SECONDS} "
             f"(minimum is {MIN_REQUEST_PAUSE_SECONDS}s)",
             file=sys.stderr,
         )

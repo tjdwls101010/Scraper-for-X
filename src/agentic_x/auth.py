@@ -127,7 +127,7 @@ def load_session(profile: str, *, profile_dir_override: str | None = None) -> Se
         config.profile_dir(profile, profile_dir_override=profile_dir_override) / SESSION_FILENAME
     )
     if not session_path.exists():
-        raise LoginRequiredError(f"no session for profile {profile!r}: run `scrape-x login`")
+        raise LoginRequiredError(f"no session for profile {profile!r}: run `agentic-x login`")
     data = json.loads(session_path.read_text(encoding="utf-8"))
     return SessionCredential(**data)
 
@@ -283,7 +283,7 @@ def from_cookie_file(
     credential = SessionCredential(auth_token=auth_token, ct0=ct0, user_agent=DEFAULT_USER_AGENT)
     save_session(profile, credential, profile_dir_override=profile_dir_override)
     print(
-        f"scrape-x: {path} still contains a live, password-less X session — "
+        f"agentic-x: {path} still contains a live, password-less X session — "
         "delete or secure it now that it has been imported",
         file=sys.stderr,
     )
@@ -355,7 +355,7 @@ def normalize_tweet_identifier(raw: str) -> str:
     either a ``/status/<id>`` URL or a bare tweet id, never a handle. A
     dedicated function avoids ``normalize_identifier``'s default-to-``"id"``
     behavior being interpreted as a *user* id lookup by a caller that only
-    wants a tweet id (plan §1, §5 -- ``fetch_tweet``/``scrape-x tweet``).
+    wants a tweet id (plan §1, §5 -- ``fetch_tweet``/``agentic-x tweet``).
     """
     raw = raw.strip()
     if not raw:

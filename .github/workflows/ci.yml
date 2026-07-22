@@ -47,11 +47,11 @@ jobs:
   build-and-smoke:
     # This installs the BASE wheel only — no [browser] extra, so scrapling is
     # never installed in this job. That is deliberate: scrapling is an extra
-    # for this package (unlike scrape-fb, where it's a base dependency and
+    # for this package (unlike agentic-facebook, where it's a base dependency and
     # that package's smoke test only guards against a missing browser
     # *binary*). Here, the load-bearing regression this job catches is an
     # eager top-level `import scrapling` anywhere in the base import path
-    # (session.py/cli.py/__init__.py) — if that ever creeps in, `scrape-x
+    # (session.py/cli.py/__init__.py) — if that ever creeps in, `agentic-x
     # --version` fails at import time with scrapling not even installed,
     # and this job is the only thing that would catch it (plan §13/§14).
     strategy:
@@ -83,9 +83,9 @@ jobs:
 
       - name: Smoke test the entry point (scrapling absent)
         run: |
-          smoke-venv/bin/scrape-x --version
-          smoke-venv/bin/scrape-x --help
+          smoke-venv/bin/agentic-x --version
+          smoke-venv/bin/agentic-x --help
           # `schema` is offline + base-install-safe (no scrapling): proves the
           # base wheel can emit the output schema the x-fetch skill delegates to.
-          smoke-venv/bin/scrape-x schema
-          smoke-venv/bin/scrape-x schema --json
+          smoke-venv/bin/agentic-x schema
+          smoke-venv/bin/agentic-x schema --json

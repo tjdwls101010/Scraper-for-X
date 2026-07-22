@@ -1,6 +1,6 @@
-# scraper-for-x
+# agentic-x
 
-![scraper-for-x](https://raw.githubusercontent.com/tjdwls101010/tjdwls101010/refs/heads/main/Images/scraper%20for%20x.png)
+![agentic-x](https://raw.githubusercontent.com/tjdwls101010/tjdwls101010/refs/heads/main/Images/scraper%20for%20x.png)
 
 Read-only scraping of logged-in **X/Twitter** data via a **harvest-then-replay hybrid**: a stealth browser (or a cookie import) logs you in once and harvests the session, then every read afterward is a plain `httpx` GraphQL request — no browser in the loop.
 
@@ -13,13 +13,13 @@ Reads your **home feed**, any profile's **tweets and replies**, a tweet's **thre
 Base install — cookie-import login only, **no browser dependency**:
 
 ```bash
-pip install scraper-for-x
+pip install agentic-x
 ```
 
-The `[browser]` extra — adds a stealth browser for `scrape-x login`:
+The `[browser]` extra — adds a stealth browser for `agentic-x login`:
 
 ```bash
-pip install "scraper-for-x[browser]"
+pip install "agentic-x[browser]"
 ```
 
 If you only ever import cookies from a session you already have (e.g. exported from your own logged-in browser), the base install is all you need.
@@ -28,33 +28,33 @@ If you only ever import cookies from a session you already have (e.g. exported f
 
 ```bash
 # 1. One-time interactive login — opens a real browser window, you log in by hand.
-scrape-x login
+agentic-x login
 
 # 2. Fetch a profile's tweets.
-scrape-x fetch nasa --limit 50
+agentic-x fetch nasa --limit 50
 ```
 
 ## CLI overview
 
 | Command | Purpose |
 |---|---|
-| `scrape-x login` | One-time login: headed stealth browser by default, or `--cookies FILE` to import an existing session |
-| `scrape-x status` | Check whether the persisted session is logged in, expired, or rate-limited |
-| `scrape-x setup` | Provision the login browser into an isolated cache (requires `[browser]`) |
-| `scrape-x doctor` | Authenticated round-trip + query-id freshness check (`--refresh` re-anchors query-ids from x.com's `main.js`, browser-free) |
-| `scrape-x catalog` | Machine-readable JSON description of every command, argument and exit code (offline) |
-| `scrape-x schema` | The output object schema; `--json` emits JSON Schema (offline) |
-| `scrape-x feed` | Your home feed — takes no target, the feed belongs to the session |
-| `scrape-x fetch <identifier>` | A profile's tweets/media (`--limit`, `--since`, `--until`, `--by screen_name\|id`, `--replies`†) |
-| `scrape-x search <query>` | Tweets matching a query or advanced operators (`--product latest\|top`)† |
-| `scrape-x tweet <identifier>` | A single tweet plus its reply/conversation thread (`--replies`) |
-| `scrape-x following <identifier>` | Accounts a user follows — emits `User` objects |
-| `scrape-x followers <identifier>` | Accounts following a user — emits `User` objects† |
-| `scrape-x retweeters <tweet>` | Accounts that retweeted a tweet — emits `User` objects |
+| `agentic-x login` | One-time login: headed stealth browser by default, or `--cookies FILE` to import an existing session |
+| `agentic-x status` | Check whether the persisted session is logged in, expired, or rate-limited |
+| `agentic-x setup` | Provision the login browser into an isolated cache (requires `[browser]`) |
+| `agentic-x doctor` | Authenticated round-trip + query-id freshness check (`--refresh` re-anchors query-ids from x.com's `main.js`, browser-free) |
+| `agentic-x catalog` | Machine-readable JSON description of every command, argument and exit code (offline) |
+| `agentic-x schema` | The output object schema; `--json` emits JSON Schema (offline) |
+| `agentic-x feed` | Your home feed — takes no target, the feed belongs to the session |
+| `agentic-x fetch <identifier>` | A profile's tweets/media (`--limit`, `--since`, `--until`, `--by screen_name\|id`, `--replies`†) |
+| `agentic-x search <query>` | Tweets matching a query or advanced operators (`--product latest\|top`)† |
+| `agentic-x tweet <identifier>` | A single tweet plus its reply/conversation thread (`--replies`) |
+| `agentic-x following <identifier>` | Accounts a user follows — emits `User` objects |
+| `agentic-x followers <identifier>` | Accounts following a user — emits `User` objects† |
+| `agentic-x retweeters <tweet>` | Accounts that retweeted a tweet — emits `User` objects |
 
 † Needs a generated `x-client-transaction-id` — see below.
 
-All read commands share `--format json|ndjson`, `--output PATH`, `--profile NAME`, `--profile-dir PATH`, `--wait-on-limit`, `--max-wait`, `--raw` (+ `--no-redact`), and `-v/--verbose`. See the [CLI Reference](docs/wiki/CLI-Reference.md) for every flag and exit code — or just run `scrape-x catalog` for the same thing as JSON.
+All read commands share `--format json|ndjson`, `--output PATH`, `--profile NAME`, `--profile-dir PATH`, `--wait-on-limit`, `--max-wait`, `--raw` (+ `--no-redact`), and `-v/--verbose`. See the [CLI Reference](docs/wiki/CLI-Reference.md) for every flag and exit code — or just run `agentic-x catalog` for the same thing as JSON.
 
 ### The transaction-id wall, and how this package gets past it
 
@@ -66,12 +66,12 @@ Since v0.3.0 this package **generates** that header per request, in pure Python,
 
 ### What X no longer exposes
 
-`likers` is not implemented and will not be: X has removed the likers list entirely. `/status/<id>/likes` redirects to the tweet, and the operation name appears in none of the JavaScript chunks x.com serves today (checked 2026-07-20, all 685 of them). For quoters, use `scrape-x search "quoted_tweet_id:<id>"` — that is exactly what X's own /quotes tab does.
+`likers` is not implemented and will not be: X has removed the likers list entirely. `/status/<id>/likes` redirects to the tweet, and the operation name appears in none of the JavaScript chunks x.com serves today (checked 2026-07-20, all 685 of them). For quoters, use `agentic-x search "quoted_tweet_id:<id>"` — that is exactly what X's own /quotes tab does.
 
 ## Python API
 
 ```python
-from scraper_for_x import XScraper
+from agentic_x import XScraper
 
 XScraper(profile="default").login()  # one-time, opens a headed browser
 

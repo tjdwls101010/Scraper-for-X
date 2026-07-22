@@ -20,7 +20,7 @@ If that form is unavailable to you, contact the maintainer through their GitHub 
 ### What to include
 
 - What the issue is and what an attacker gets out of it.
-- Steps to reproduce, and the affected version (`scrape-x --version`).
+- Steps to reproduce, and the affected version (`agentic-x --version`).
 - Any output you are pasting: run it through the tool's own redaction first. **Never paste `--raw --no-redact` output** — it contains live session fragments and other people's tweet text in the clear. See [docs/wiki/Security-and-Privacy.md](docs/wiki/Security-and-Privacy.md).
 
 ### What to expect

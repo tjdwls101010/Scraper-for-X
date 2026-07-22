@@ -153,9 +153,7 @@ class ReadClient:
                     f"{operation} rejected a generated x-client-transaction-id "
                     f"(HTTP {response.status_code})"
                 )
-            raise errors.ScraperForXError(
-                f"unexpected status {response.status_code} for {operation}"
-            )
+            raise errors.AgenticXError(f"unexpected status {response.status_code} for {operation}")
         body = response.json()
         if _has_auth_error(body):
             raise errors.SessionExpiredError()

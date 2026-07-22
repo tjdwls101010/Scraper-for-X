@@ -1,6 +1,6 @@
 import pytest
 
-from scraper_for_x import EnvelopeParseError, ScraperForXError, parse
+from agentic_x import AgenticXError, EnvelopeParseError, parse
 
 
 def _rest_id(raw_tweet: dict) -> str:
@@ -65,13 +65,13 @@ def test_envelope_parse_error_on_missing_instructions():
         parse.walk_instructions({"data": {}}, "UserTweets")
 
 
-def test_envelope_parse_error_is_a_public_scraper_for_x_error():
-    """Regression guard: a library user doing `except ScraperForXError:` around
+def test_envelope_parse_error_is_a_public_agentic_x_error():
+    """Regression guard: a library user doing `except AgenticXError:` around
     an XScraper read (the documented pattern, per errors.py's module
     docstring) must actually catch a query-id-drift failure -- it previously
     only subclassed the bare `Exception`, and wasn't re-exported from the
     package root at all."""
-    assert issubclass(EnvelopeParseError, ScraperForXError)
+    assert issubclass(EnvelopeParseError, AgenticXError)
     assert parse.EnvelopeParseError is EnvelopeParseError  # same class, not a shadow copy
 
 

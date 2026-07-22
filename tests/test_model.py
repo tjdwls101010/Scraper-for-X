@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from scraper_for_x import model, parse
+from agentic_x import model, parse
 
 
 def _tweets_by_id(load_fixture, name: str, operation: str) -> dict:

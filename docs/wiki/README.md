@@ -1,6 +1,6 @@
-# scraper-for-x wiki
+# agentic-x wiki
 
-`scrape-x` is a read-only X/Twitter scraper built on a **harvest-then-replay hybrid**: a stealth browser (or a cookie import) logs you in once and harvests the session, then every read afterward is a plain `httpx` GraphQL request — no browser in the loop.
+`agentic-x` is a read-only X/Twitter scraper built on a **harvest-then-replay hybrid**: a stealth browser (or a cookie import) logs you in once and harvests the session, then every read afterward is a plain `httpx` GraphQL request — no browser in the loop.
 
 It reads your home feed, any profile's tweets and replies, a tweet and its thread, search, and the social graph (following / followers / retweeters). Each command is a **single-target primitive** that writes JSON; chaining them into multi-hop exploration is left to the caller, deliberately.
 
@@ -28,7 +28,7 @@ It reads your home feed, any profile's tweets and replies, a tweet and its threa
 ## Elsewhere
 
 - [Main README](../../README.md)
-- [PyPI package](https://pypi.org/project/scraper-for-x/)
+- [PyPI package](https://pypi.org/project/agentic-x/)
 
 ---
 

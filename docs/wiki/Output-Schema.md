@@ -1,10 +1,10 @@
 # Output Schema
 
-Every tweet `scrape-x fetch`/`feed`/`search`/`tweet` writes — whether to the default JSON file, `--format ndjson`, or a `Tweet` object from the [Python API](Python-API-Reference.md) — follows the same shape: one `Tweet` per top-level result, with a nested `User` for the author, a list of `Media`, and (optionally) one level of nested `Tweet` for a retweet or quote.
+Every tweet `agentic-x fetch`/`feed`/`search`/`tweet` writes — whether to the default JSON file, `--format ndjson`, or a `Tweet` object from the [Python API](Python-API-Reference.md) — follows the same shape: one `Tweet` per top-level result, with a nested `User` for the author, a list of `Media`, and (optionally) one level of nested `Tweet` for a retweet or quote.
 
 **Three commands write something else entirely.** `following`, `followers` and `retweeters` produce an array of `User` objects at the top level, with no `Tweet` anywhere in the file — see [User as a top-level result](#user-as-a-top-level-result).
 
-This page is a field-by-field reference generated from `src/scraper_for_x/model.py`. If a field here ever disagrees with what you actually get out of the tool, that's a bug.
+This page is a field-by-field reference generated from `src/agentic_x/model.py`. If a field here ever disagrees with what you actually get out of the tool, that's a bug.
 
 **Pre-1.0 stability promise** (from `model.py`'s module docstring): fields may be *added* in minor versions, but an existing field's meaning will not be silently reinterpreted. There are also no field defaults except `Tweet.raw` — every field is always present in `to_dict()` output (as `null` if unknown), so you can rely on the key existing even when the value doesn't.
 
@@ -226,7 +226,7 @@ Two consequences worth planning for:
 - **Check which type you're holding before indexing into it.** A `User` has no `text`; a `Tweet` has no `screen_name` at the top level (its author is nested under `author`). If you merge results from several commands into one pile, the presence of `text` is the cheapest discriminator.
 - **A `User` is a handle, not an answer.** It carries who the account is, never what it posted. To get their tweets, feed `screen_name` back into `fetch`.
 
-There is no separate schema command for this shape — `scrape-x schema` already documents `User` in full, because it is the same dataclass either way.
+There is no separate schema command for this shape — `agentic-x schema` already documents `User` in full, because it is the same dataclass either way.
 
 ## See also
 

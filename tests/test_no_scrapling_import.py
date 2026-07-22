@@ -1,9 +1,9 @@
-"""Regression guard for G-lazy-import (plan §14): importing scraper_for_x, and
+"""Regression guard for G-lazy-import (plan §14): importing agentic_x, and
 using its base-install-safe surface, must never pull in scrapling.
 
 The real-world consequence this protects against is a base (no `[browser]`
-extra) install crashing on `import scraper_for_x` -- everything from
-`scrape-x --version` to a cookie-import login depends on this staying true.
+extra) install crashing on `import agentic_x` -- everything from
+`agentic-x --version` to a cookie-import login depends on this staying true.
 This is a pytest-level regression test alongside the equivalent CI job
 (`.github/workflows/ci.yml`'s `build-and-smoke`, which additionally verifies
 it against a real built wheel in a clean venv) -- this test catches the same
@@ -25,12 +25,12 @@ def _run(code: str) -> subprocess.CompletedProcess:
 
 
 def test_import_does_not_pull_in_scrapling():
-    result = _run("import scraper_for_x, sys; assert 'scrapling' not in sys.modules")
+    result = _run("import agentic_x, sys; assert 'scrapling' not in sys.modules")
     assert result.returncode == 0, result.stderr
 
 
 def test_cli_module_import_does_not_pull_in_scrapling():
-    result = _run("import scraper_for_x.cli, sys; assert 'scrapling' not in sys.modules")
+    result = _run("import agentic_x.cli, sys; assert 'scrapling' not in sys.modules")
     assert result.returncode == 0, result.stderr
 
 
@@ -40,7 +40,6 @@ def test_auth_and_session_modules_do_not_pull_in_scrapling():
     (inside `_build_stealth_session`/`run_setup`), so importing it bare must
     not trigger it."""
     result = _run(
-        "import scraper_for_x.auth, scraper_for_x.session, sys; "
-        "assert 'scrapling' not in sys.modules"
+        "import agentic_x.auth, agentic_x.session, sys; assert 'scrapling' not in sys.modules"
     )
     assert result.returncode == 0, result.stderr

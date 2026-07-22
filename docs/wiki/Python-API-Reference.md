@@ -1,13 +1,13 @@
 # Python API Reference
 
-Everything in this page is importable from the top-level `scraper_for_x` package. If you only need the CLI, see [CLI Reference](CLI-Reference.md) instead — this page is for embedding scraping into your own Python code.
+Everything in this page is importable from the top-level `agentic_x` package. If you only need the CLI, see [CLI Reference](CLI-Reference.md) instead — this page is for embedding scraping into your own Python code.
 
 Read [DISCLAIMER.md](../../DISCLAIMER.md) before writing anything that calls this on an account you care about.
 
 ```python
-from scraper_for_x import (
+from agentic_x import (
     XScraper, Tweet, User, Media, Status, RetrieveResult,
-    ScraperForXError, LoginRequiredError, SessionExpiredError, RateLimitedError,
+    AgenticXError, LoginRequiredError, SessionExpiredError, RateLimitedError,
     ProfileUnavailableError, NotFoundError, InvalidCookieError, InvalidIdentifierError,
     NotEnteredError, SessionClosedError, EnvelopeParseError,
     TransactionIdError, GatedOpRejectedError, BrowserFallbackError,
@@ -34,8 +34,8 @@ from scraper_for_x import (
 ```python
 from datetime import date
 
-from scraper_for_x import XScraper, Status
-from scraper_for_x.errors import (
+from agentic_x import XScraper, Status
+from agentic_x.errors import (
     LoginRequiredError, SessionExpiredError, RateLimitedError,
     ProfileUnavailableError, NotFoundError, InvalidIdentifierError,
 )
@@ -187,7 +187,7 @@ Makes one cheap authenticated GraphQL read and reports which of three states the
 | `Status.RATE_LIMITED` | The status check itself got a 429. Try again later. |
 
 ```python
-from scraper_for_x import XScraper, Status
+from agentic_x import XScraper, Status
 
 x = XScraper(profile="default")
 if x.status() is not Status.LOGGED_IN:
@@ -231,8 +231,8 @@ Sets `self.last_result` to the [`RetrieveResult`](#retrieveresult) for this call
 
 ```python
 from datetime import date
-from scraper_for_x import XScraper
-from scraper_for_x.errors import (
+from agentic_x import XScraper
+from agentic_x.errors import (
     LoginRequiredError, SessionExpiredError, RateLimitedError,
     ProfileUnavailableError, SessionClosedError, InvalidIdentifierError,
 )
@@ -474,10 +474,10 @@ All three are plain `@dataclass`es with a `to_dict()` method producing JSON-seri
 
 ## Exceptions
 
-All exceptions live in `scraper_for_x.errors` and are also re-exported from the top-level package. All of them ultimately subclass `ScraperForXError`, so `except ScraperForXError:` catches anything this package raises on purpose.
+All exceptions live in `agentic_x.errors` and are also re-exported from the top-level package. All of them ultimately subclass `AgenticXError`, so `except AgenticXError:` catches anything this package raises on purpose.
 
 ```
-ScraperForXError (base)
+AgenticXError (base)
 ├── LoginRequiredError
 ├── SessionExpiredError
 ├── RateLimitedError
@@ -494,13 +494,13 @@ ScraperForXError (base)
 └── FeatureNotImplementedError  (deprecated — never raised)
 ```
 
-#### `ScraperForXError`
+#### `AgenticXError`
 
 Base class for every error this package raises on purpose. Catch this if you just want to distinguish "this package failed in a known way" from an unexpected exception.
 
 #### `LoginRequiredError`
 
-No persisted session exists for this profile — entering the `with` block (or calling `status()`) found nothing on disk. **Fix:** call `login()`, or `from_cookies()`/`from_cookie_file()`, or `scrape-x login` from the CLI.
+No persisted session exists for this profile — entering the `with` block (or calling `status()`) found nothing on disk. **Fix:** call `login()`, or `from_cookies()`/`from_cookie_file()`, or `agentic-x login` from the CLI.
 
 #### `SessionExpiredError`
 
@@ -541,7 +541,7 @@ A read was attempted on an `XScraper` instance whose `with` block has already ex
 
 #### `EnvelopeParseError`
 
-The GraphQL response envelope couldn't be located at all (e.g. `data.user.result.timeline...` for `UserTweets`) — a structural parse failure, distinct from a page that parsed fine but had zero tweets. Almost always means X rotated a query-id or changed the response shape. **Fix:** run `scrape-x doctor --refresh` (or `XScraper(...).status()` followed by a fresh `login()`) to re-anchor query-ids, then retry.
+The GraphQL response envelope couldn't be located at all (e.g. `data.user.result.timeline...` for `UserTweets`) — a structural parse failure, distinct from a page that parsed fine but had zero tweets. Almost always means X rotated a query-id or changed the response shape. **Fix:** run `agentic-x doctor --refresh` (or `XScraper(...).status()` followed by a fresh `login()`) to re-anchor query-ids, then retry.
 
 #### `TransactionIdError`
 

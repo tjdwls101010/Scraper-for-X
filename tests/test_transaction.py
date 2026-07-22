@@ -14,7 +14,7 @@ import base64
 
 import pytest
 
-from scraper_for_x import transaction
+from agentic_x import transaction
 
 # key_bytes = 0..47, so the derived indices are easy to follow:
 #   key_bytes[5] % 4  == 1  -> frame 1 is the one read
@@ -138,7 +138,7 @@ def test_gated_ops_are_exactly_the_three_probed_walls():
 
 
 def test_ungated_ops_get_no_txid_header():
-    from scraper_for_x import client as client_module
+    from agentic_x import client as client_module
 
     read_client = client_module.ReadClient("token", "ct0", "ua")
     try:
@@ -150,7 +150,7 @@ def test_ungated_ops_get_no_txid_header():
 
 
 def test_gated_ops_get_a_txid_header(monkeypatch):
-    from scraper_for_x import client as client_module
+    from agentic_x import client as client_module
 
     read_client = client_module.ReadClient("token", "ct0", "ua")
     monkeypatch.setattr(
