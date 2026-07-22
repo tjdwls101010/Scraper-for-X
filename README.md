@@ -13,13 +13,13 @@ Reads your **home feed**, any profile's **tweets and replies**, a tweet's **thre
 Base install — cookie-import login only, **no browser dependency**:
 
 ```bash
-pip install agentic-x
+pip install agentic-twitter
 ```
 
 The `[browser]` extra — adds a stealth browser for `agentic-x login`:
 
 ```bash
-pip install "agentic-x[browser]"
+pip install "agentic-twitter[browser]"
 ```
 
 If you only ever import cookies from a session you already have (e.g. exported from your own logged-in browser), the base install is all you need.

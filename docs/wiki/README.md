@@ -28,7 +28,7 @@ It reads your home feed, any profile's tweets and replies, a tweet and its threa
 ## Elsewhere
 
 - [Main README](../../README.md)
-- [PyPI package](https://pypi.org/project/agentic-x/)
+- [PyPI package](https://pypi.org/project/agentic-twitter/)
 
 ---
 

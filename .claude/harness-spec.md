@@ -54,7 +54,7 @@ The skill must NOT restate the CLI's flags — `agentic-x catalog` is generated 
 
 This matters more for this package than it would for most, and that is the actual justification: **agentic-x rots by design.** Query-ids rotate every 2–4 weeks and the transaction-id generator breaks whenever X ships a client build; both fixes arrive only as new releases. Running stale is this package's dominant failure mode, so detecting staleness proactively is worth a round trip. Measured cost of the check: **~40ms**. The sibling skill's reasoning should be revisited on its own next pass.
 
-**D3 — read the version from the simple index, not only the JSON API.** Measured live during this pass: minutes after v0.3.0 was published, `pypi.org/pypi/agentic-x/json` still reported `0.2.0` while `pypi.org/simple/agentic-x/` already listed `0.3.0`. The JSON endpoint caught up about a minute later. A version check that trusts the JSON API alone can conclude "already latest" immediately after a release that exists.
+**D3 — read the version from the simple index, not only the JSON API.** Measured live during this pass: minutes after v0.3.0 was published, `pypi.org/pypi/agentic-twitter/json` still reported `0.2.0` while `pypi.org/simple/agentic-twitter/` already listed `0.3.0`. The JSON endpoint caught up about a minute later. A version check that trusts the JSON API alone can conclude "already latest" immediately after a release that exists.
 
 **D4 — no hooks, no permissions entries, no agents.** Nothing here needs deterministic enforcement: the package already clamps its own non-bypassable rate floor in code, and the destructive-action surface is empty (every command is read-only). Adding a hook would be enforcement theatre over a guarantee the package already makes itself.
 

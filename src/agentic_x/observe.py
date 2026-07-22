@@ -79,7 +79,7 @@ def observe(
             response = browser.fetch(url, page_action=_settle, timeout=60000)
     except ImportError as exc:  # scrapling absent
         raise BrowserFallbackError(
-            "the browser fallback needs the [browser] extra: pip install 'agentic-x[browser]'"
+            "the browser fallback needs the [browser] extra: pip install 'agentic-twitter[browser]'"
         ) from exc
 
     body = pick_body(response.captured_xhr, operation)

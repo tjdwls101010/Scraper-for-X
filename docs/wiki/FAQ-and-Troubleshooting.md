@@ -132,7 +132,7 @@ Don't. There's no built-in scheduler or daemon mode, and none will be added — 
   ```bash
   agentic-x setup --force
   ```
-- **`agentic-x setup` itself missing** — `setup` (and `login` without `--cookies`) require the `[browser]` extra (`pip install "agentic-x[browser]"`). A base install only supports the cookie-import login path.
+- **`agentic-x setup` itself missing** — `setup` (and `login` without `--cookies`) require the `[browser]` extra (`pip install "agentic-twitter[browser]"`). A base install only supports the cookie-import login path.
 
 If it still fails after `--force` with a clean network connection, that's worth a GitHub issue with whatever it printed attached.
 
